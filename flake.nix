@@ -34,6 +34,8 @@
             ncurses
             patchelf
             zlib
+
+            jdt-language-server
           ];
 
           shellHook =
