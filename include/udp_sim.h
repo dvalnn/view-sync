@@ -10,14 +10,14 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-// Estrutura para representar um pacote UDP
+// UDP packet struct
 typedef struct {
-    char data[1024]; // Tamanho máximo do pacote
+    char data[1024]; // Max packet size
     int len;
     struct sockaddr_in addr;
 } udp_packet_t;
 
-// Funções da biblioteca
+// lib functions
 int udp_sim_init();
 int udp_sim_create_socket(int *sockfd);
 int udp_sim_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
@@ -27,7 +27,7 @@ int udp_sim_recvfrom(int sockfd, void *buf, size_t len, int flags,
                    struct sockaddr *src_addr, socklen_t *addrlen);
 int udp_sim_close(int sockfd);
 
-// Funções para configurar a simulação
+// sim config functions
 void udp_sim_set_packet_loss_rate(double rate);
 void udp_sim_set_delay_distribution(char *distribution); // Ex: normal, uniform
 

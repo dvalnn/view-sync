@@ -6,6 +6,7 @@
 static void null_test_success(void **state) {
     (void) state; /* unused */
 }
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(null_test_success),

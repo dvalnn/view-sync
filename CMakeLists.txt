@@ -1,9 +1,7 @@
 # Minimum CMake version
 cmake_minimum_required(VERSION 3.10)
-
 # Project name and version
-project(UDPServerTest VERSION 1.0 LANGUAGES C)
-
+project(view_sync VERSION 1.0 LANGUAGES C)
 
 include_directories(include)
 
@@ -20,6 +18,7 @@ set(SRC_FILES
 set(TEST_FILES
     test/test_main.c
 )
+
 # ----- Project compilation ----- # 
 add_executable(view_sync ${SRC_FILES})
 
