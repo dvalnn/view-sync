@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 3.10)
 # Project name and version
 project(UDPServerTest VERSION 1.0 LANGUAGES C)
 
-# Enable testing
-enable_testing()
+
+include_directories(include)
 
 # Set C standard
 set(CMAKE_C_STANDARD 23)
@@ -18,20 +18,20 @@ set(SRC_FILES
 
 # Add the test files
 set(TEST_FILES
-    tests/test_main.c
+    test/test_main.c
 )
+# ----- Project compilation ----- # 
+add_executable(view_sync ${SRC_FILES})
 
-# Find CMocka (required)
-find_package(CMocka REQUIRED)
+target_compile_options(view_sync PRIVATE -Wall -Wextra -Werror)
 
-# Create an executable for the tests
-add_executable(udp_server_tests ${TEST_FILES} ${SRC_FILES})
+# ----- Project testing ----- # 
+enable_testing()
 
-# Link CMocka library to the test executable
-target_link_libraries(udp_server_tests PRIVATE cmocka)
+add_executable(tests ${TEST_FILES})
 
-# Add compile options (optional)
-target_compile_options(udp_server_tests PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(tests PRIVATE cmocka)
 
-# Add test to CTest
-add_test(NAME UDPServerTests COMMAND udp_server_tests)
+target_compile_options(tests PRIVATE -Wall -Wextra -Werror)
+
+add_test(NAME view_sync_tests COMMAND tests)
