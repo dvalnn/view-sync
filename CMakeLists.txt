@@ -19,6 +19,7 @@ set(SRC_FILES
 # Add the test files
 set(TEST_FILES
     test/test_main.c
+    test/test2.c
 )
 # ----- Project compilation ----- # 
 add_executable(view_sync ${SRC_FILES})
@@ -28,10 +29,14 @@ target_compile_options(view_sync PRIVATE -Wall -Wextra -Werror)
 # ----- Project testing ----- # 
 enable_testing()
 
-add_executable(tests ${TEST_FILES})
+foreach(TEST_FILE ${TEST_FILE})
+    get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE)
+    
+    add_executable(${TEST_NAME} ${TEST_FILE})
 
-target_link_libraries(tests PRIVATE cmocka)
+    target_link_libraries(${TEST_NAME} PRIVATE cmocka)
 
-target_compile_options(tests PRIVATE -Wall -Wextra -Werror)
+    target_compile_options(${TEST_NAME} PRIVATE -Wall -Wextra -Werror)
 
-add_test(NAME view_sync_tests COMMAND tests)
+    add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+endforeach()
