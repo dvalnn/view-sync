@@ -36,4 +36,6 @@ void result_free(Result *r);
 inline bool result_is_ok(Result *r) { return r->_is_ok; }
 inline bool result_is_err(Result *r) { return !r->_is_ok; }
 
+#define RESULT_UNIMPLEMENTED result_new_err("Unimplemented")
+
 #endif

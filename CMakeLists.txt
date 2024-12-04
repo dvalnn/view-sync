@@ -12,13 +12,18 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Add source files for the server
 set(SRC_FILES
-    src/udp_sim.c
+    # project
     src/result.c
+    src/view.c
+
+    # Third party
+    src/lib/stb_ds.c
 )
 
 # Add the test files
 set(TEST_FILES
     test/test_result.c
+    test/test_view.c
 )
 
 # ----- Project compilation ----- # 

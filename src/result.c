@@ -21,7 +21,7 @@ Result *result_new_err(const char *error) {
 
 void *result_unwrap(Result *r) {
   if (result_is_err(r)) {
-    fprintf(stderr, "Error: %s\n", r->err);
+    fprintf(stderr, "[UNWRAP] Error: %s\n", r->err);
     exit(EXIT_FAILURE);
   }
   void *value = r->ok;
@@ -31,7 +31,7 @@ void *result_unwrap(Result *r) {
 
 void *result_expect(Result *r, const char *msg) {
   if (result_is_err(r)) {
-    fprintf(stderr, "%s: %s\n", msg, r->err);
+    fprintf(stderr, "[EXPECT] %s: %s\n", msg, r->err);
     exit(EXIT_FAILURE);
   }
   void *value = r->ok;

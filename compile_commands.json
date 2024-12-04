@@ -1,15 +1,9 @@
 [
 {
   "directory": "/home/dvalinn/projects/view-sync/build",
-  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/view_sync.dir/src/main.c.o -c /home/dvalinn/projects/view-sync/src/main.c",
-  "file": "/home/dvalinn/projects/view-sync/src/main.c",
-  "output": "CMakeFiles/view_sync.dir/src/main.c.o"
-},
-{
-  "directory": "/home/dvalinn/projects/view-sync/build",
-  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/view_sync.dir/src/udp_sim.c.o -c /home/dvalinn/projects/view-sync/src/udp_sim.c",
-  "file": "/home/dvalinn/projects/view-sync/src/udp_sim.c",
-  "output": "CMakeFiles/view_sync.dir/src/udp_sim.c.o"
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/view_sync.dir/main.c.o -c /home/dvalinn/projects/view-sync/main.c",
+  "file": "/home/dvalinn/projects/view-sync/main.c",
+  "output": "CMakeFiles/view_sync.dir/main.c.o"
 },
 {
   "directory": "/home/dvalinn/projects/view-sync/build",
@@ -19,20 +13,62 @@
 },
 {
   "directory": "/home/dvalinn/projects/view-sync/build",
-  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -o CMakeFiles/tests.dir/test/test_result.c.o -c /home/dvalinn/projects/view-sync/test/test_result.c",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/view_sync.dir/src/view.c.o -c /home/dvalinn/projects/view-sync/src/view.c",
+  "file": "/home/dvalinn/projects/view-sync/src/view.c",
+  "output": "CMakeFiles/view_sync.dir/src/view.c.o"
+},
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/view_sync.dir/src/lib/stb_ds.c.o -c /home/dvalinn/projects/view-sync/src/lib/stb_ds.c",
+  "file": "/home/dvalinn/projects/view-sync/src/lib/stb_ds.c",
+  "output": "CMakeFiles/view_sync.dir/src/lib/stb_ds.c.o"
+},
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/test_result.dir/test/test_result.c.o -c /home/dvalinn/projects/view-sync/test/test_result.c",
   "file": "/home/dvalinn/projects/view-sync/test/test_result.c",
-  "output": "CMakeFiles/tests.dir/test/test_result.c.o"
+  "output": "CMakeFiles/test_result.dir/test/test_result.c.o"
 },
 {
   "directory": "/home/dvalinn/projects/view-sync/build",
-  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -o CMakeFiles/tests.dir/src/udp_sim.c.o -c /home/dvalinn/projects/view-sync/src/udp_sim.c",
-  "file": "/home/dvalinn/projects/view-sync/src/udp_sim.c",
-  "output": "CMakeFiles/tests.dir/src/udp_sim.c.o"
-},
-{
-  "directory": "/home/dvalinn/projects/view-sync/build",
-  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -o CMakeFiles/tests.dir/src/result.c.o -c /home/dvalinn/projects/view-sync/src/result.c",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/test_result.dir/src/result.c.o -c /home/dvalinn/projects/view-sync/src/result.c",
   "file": "/home/dvalinn/projects/view-sync/src/result.c",
-  "output": "CMakeFiles/tests.dir/src/result.c.o"
+  "output": "CMakeFiles/test_result.dir/src/result.c.o"
+},
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/test_result.dir/src/view.c.o -c /home/dvalinn/projects/view-sync/src/view.c",
+  "file": "/home/dvalinn/projects/view-sync/src/view.c",
+  "output": "CMakeFiles/test_result.dir/src/view.c.o"
+},
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/test_result.dir/src/lib/stb_ds.c.o -c /home/dvalinn/projects/view-sync/src/lib/stb_ds.c",
+  "file": "/home/dvalinn/projects/view-sync/src/lib/stb_ds.c",
+  "output": "CMakeFiles/test_result.dir/src/lib/stb_ds.c.o"
+},
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/test_view.dir/test/test_view.c.o -c /home/dvalinn/projects/view-sync/test/test_view.c",
+  "file": "/home/dvalinn/projects/view-sync/test/test_view.c",
+  "output": "CMakeFiles/test_view.dir/test/test_view.c.o"
+},
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/test_view.dir/src/result.c.o -c /home/dvalinn/projects/view-sync/src/result.c",
+  "file": "/home/dvalinn/projects/view-sync/src/result.c",
+  "output": "CMakeFiles/test_view.dir/src/result.c.o"
+},
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/test_view.dir/src/view.c.o -c /home/dvalinn/projects/view-sync/src/view.c",
+  "file": "/home/dvalinn/projects/view-sync/src/view.c",
+  "output": "CMakeFiles/test_view.dir/src/view.c.o"
+},
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/test_view.dir/src/lib/stb_ds.c.o -c /home/dvalinn/projects/view-sync/src/lib/stb_ds.c",
+  "file": "/home/dvalinn/projects/view-sync/src/lib/stb_ds.c",
+  "output": "CMakeFiles/test_view.dir/src/lib/stb_ds.c.o"
 }
 ]
