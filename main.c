@@ -18,7 +18,6 @@ int main(int argc, char **argv) {
   }
 
   printf("[Parent] Spawning %d children\n", n_child_proc);
-
   for (int i = 0; i < n_child_proc; i++) {
     pid_t pid = fork();
     if (pid == -1) {

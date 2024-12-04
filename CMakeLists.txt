@@ -22,17 +22,18 @@ set(TEST_FILES
 )
 
 # ----- Project compilation ----- # 
-add_executable(view_sync src/main.c ${SRC_FILES})
-
+add_executable(view_sync main.c ${SRC_FILES})
 target_compile_options(view_sync PRIVATE -Wall -Wextra -Werror)
 
 # ----- Project testing ----- # 
 enable_testing()
 
-add_executable(tests ${TEST_FILES} ${SRC_FILES})
+# Iterate over test files and create individual executables
+foreach(test_file ${TEST_FILES})
+    get_filename_component(test_name "${test_file}" NAME_WE)
 
-target_link_libraries(tests PRIVATE cmocka)
-
-target_compile_options(tests PRIVATE -Wall)
-
-add_test(NAME view_sync_tests COMMAND tests)
+    add_executable(${test_name} ${test_file} ${SRC_FILES})
+    target_link_libraries(${test_name} PRIVATE cmocka)
+    target_compile_options(${test_name} PRIVATE -Wall -Wextra -Werror)
+    add_test(NAME ${test_name} COMMAND ${test_name})
+endforeach()
