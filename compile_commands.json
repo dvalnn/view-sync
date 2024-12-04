@@ -1,0 +1,38 @@
+[
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/view_sync.dir/src/main.c.o -c /home/dvalinn/projects/view-sync/src/main.c",
+  "file": "/home/dvalinn/projects/view-sync/src/main.c",
+  "output": "CMakeFiles/view_sync.dir/src/main.c.o"
+},
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/view_sync.dir/src/udp_sim.c.o -c /home/dvalinn/projects/view-sync/src/udp_sim.c",
+  "file": "/home/dvalinn/projects/view-sync/src/udp_sim.c",
+  "output": "CMakeFiles/view_sync.dir/src/udp_sim.c.o"
+},
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -Wextra -Werror -o CMakeFiles/view_sync.dir/src/result.c.o -c /home/dvalinn/projects/view-sync/src/result.c",
+  "file": "/home/dvalinn/projects/view-sync/src/result.c",
+  "output": "CMakeFiles/view_sync.dir/src/result.c.o"
+},
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -o CMakeFiles/tests.dir/test/test_result.c.o -c /home/dvalinn/projects/view-sync/test/test_result.c",
+  "file": "/home/dvalinn/projects/view-sync/test/test_result.c",
+  "output": "CMakeFiles/tests.dir/test/test_result.c.o"
+},
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -o CMakeFiles/tests.dir/src/udp_sim.c.o -c /home/dvalinn/projects/view-sync/src/udp_sim.c",
+  "file": "/home/dvalinn/projects/view-sync/src/udp_sim.c",
+  "output": "CMakeFiles/tests.dir/src/udp_sim.c.o"
+},
+{
+  "directory": "/home/dvalinn/projects/view-sync/build",
+  "command": "/nix/store/3ix5h74n7ar9950vwzp4dxmil70pmx0k-gcc-wrapper-13.3.0/bin/gcc  -I/home/dvalinn/projects/view-sync/include -std=gnu2x -Wall -o CMakeFiles/tests.dir/src/result.c.o -c /home/dvalinn/projects/view-sync/src/result.c",
+  "file": "/home/dvalinn/projects/view-sync/src/result.c",
+  "output": "CMakeFiles/tests.dir/src/result.c.o"
+}
+]

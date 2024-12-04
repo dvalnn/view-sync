@@ -1,8 +1,11 @@
 # Nix
-result*
+result/
 
 # Misc
 .direnv
 
 # cmake
 build/
+
+#clangd
+.cache
