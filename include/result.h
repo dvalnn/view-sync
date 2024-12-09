@@ -12,25 +12,69 @@ struct Result {
   // holds error msg if failure
   const char *err;
 };
-
 typedef struct Result Result;
 
-// allocates a new Result, sets ->value to the given value
+/**
+ * @brief Creates a new successful `Result` object.
+ *
+ * Allocates and initializes a new `Result` structure representing a successful
+ * operation. The `ok` field is set to the provided value, and the `err` field
+ * is set to `nullptr`.
+ *
+ * @param value A pointer to the value to store in the `Result` object.
+ * @return A pointer to the newly created `Result` object.
+ */
 Result *result_new_ok(void *value);
 
-// allocates a new Result, ->error to the given error
+/**
+ * @brief Creates a new error `Result` object.
+ *
+ * Allocates and initializes a new `Result` structure representing a failed
+ * operation. The `err` field is set to the provided error message, and the
+ * `ok` field is set to `nullptr`.
+ *
+ * @param error A string describing the error that occurred.
+ * @return A pointer to the newly created `Result` object.
+ */
 Result *result_new_err(const char *error);
 
-// returns the value of the Result and destroys it. If the Result contains an
-// error the error message is printed to stderr and the process exists with
-// EXIT_FAILURE
+/**
+ * @brief Extracts the value from a successful `Result` or exits on error.
+ *
+ * If the `Result` represents a success, the function extracts and returns the
+ * `ok` value, freeing the `Result` in the process. If the `Result` is an error,
+ * the function prints the error message to `stderr` and exits the program.
+ *
+ * @param r A pointer to the `Result` object to unwrap.
+ * @return A pointer to the value stored in the `Result`'s `ok` field.
+ * @note The function terminates the program on error.
+ */
 void *result_unwrap(Result *r);
 
-// returns the value of the Result and destroys it. If the Result contains an
-// error the provided error message is printed to stderr and the process exists
-// with EXIT_FAILURE
-void *result_expect(Result *r, const char *err);
+/**
+ * @brief Extracts the value from a successful `Result` or exits with a custom
+ * message.
+ *
+ * If the `Result` represents a success, the function extracts and returns the
+ * `ok` value, freeing the `Result` in the process. If the `Result` is an error,
+ * the function prints a custom error message along with the `Result`'s error
+ * message to `stderr` and exits the program.
+ *
+ * @param r A pointer to the `Result` object to unwrap.
+ * @param msg A custom message to display if the `Result` is an error.
+ * @return A pointer to the value stored in the `Result`'s `ok` field.
+ * @note The function terminates the program on error.
+ */
+void *result_expect(Result *r, const char *msg);
 
+/**
+ * @brief Frees the memory associated with a `Result` object.
+ *
+ * Releases the memory allocated for the `Result` structure. Does not free the
+ * memory pointed to by the `ok` or `err` fields.
+ *
+ * @param r A pointer to the `Result` object to free.
+ */
 void result_free(Result *r);
 
 inline bool result_is_ok(Result *r) { return r->_is_ok; }

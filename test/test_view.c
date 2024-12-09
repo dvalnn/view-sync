@@ -10,7 +10,7 @@ static void test_next_view_add_gmid(void **state) {
   (void)state;
 
   uint16_t initial_gm_ids[] = {10};
-  Result *result = init_view(initial_gm_ids, 1);
+  Result *result = view_init(initial_gm_ids, 1);
   assert_non_null(result);
   assert_false(result_is_err(result));
 
@@ -20,7 +20,7 @@ static void test_next_view_add_gmid(void **state) {
   assert_int_equal(initial_view->gm_ids[0], 10);
 
   view_change_t changes1[] = {{7, V_ADD}};
-  result = next_view(initial_view, changes1, 1);
+  result = view_next(initial_view, changes1, 1);
   assert_non_null(result);
   assert_false(result_is_err(result));
 
@@ -39,7 +39,7 @@ static void test_next_view_remove_gmid(void **state) {
   (void)state;
 
   uint16_t initial_gm_ids[] = {10, 7};
-  Result *result = init_view(initial_gm_ids, 2);
+  Result *result = view_init(initial_gm_ids, 2);
   assert_non_null(result);
   assert_false(result_is_err(result));
 
@@ -47,7 +47,7 @@ static void test_next_view_remove_gmid(void **state) {
   assert_non_null(initial_view);
 
   view_change_t changes2[] = {{7, V_DROP}};
-  result = next_view(initial_view, changes2, 1);
+  result = view_next(initial_view, changes2, 1);
   assert_non_null(result);
   assert_false(result_is_err(result));
 
@@ -65,7 +65,7 @@ static void test_next_view_remove_nonexistent_gmid(void **state) {
   (void)state;
 
   uint16_t initial_gm_ids[] = {10};
-  Result *result = init_view(initial_gm_ids, 1);
+  Result *result = view_init(initial_gm_ids, 1);
   assert_non_null(result);
   assert_false(result_is_err(result));
 
@@ -73,7 +73,7 @@ static void test_next_view_remove_nonexistent_gmid(void **state) {
   assert_non_null(initial_view);
 
   view_change_t changes3[] = {{42, V_DROP}};
-  result = next_view(initial_view, changes3, 1);
+  result = view_next(initial_view, changes3, 1);
   assert_non_null(result);
   assert_true(result_is_err(result));
 
@@ -85,7 +85,7 @@ static void test_next_view_multiple_changes(void **state) {
 
   // Initial GMIDs
   uint16_t initial_gm_ids[] = {10, 20, 30};
-  Result *result = init_view(initial_gm_ids, 3);
+  Result *result = view_init(initial_gm_ids, 3);
   assert_non_null(result);
   assert_false(result_is_err(result));
 
@@ -105,7 +105,7 @@ static void test_next_view_multiple_changes(void **state) {
       {30, V_DROP}  // Remove 30
   };
 
-  result = next_view(previous, changes, 4);
+  result = view_next(previous, changes, 4);
   assert_non_null(result);
   assert_false(result_is_err(result));
 
