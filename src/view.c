@@ -33,8 +33,7 @@ static Result *view_remove(view_t *view, uint16_t gmid) {
 // Produces new_view from current_view.
 // Destroys current_view.
 // Result ->ok has type (view_t *)
-// TODO: Fix this according to new interface
-Result *next_view(view_t *previous, uint16_t gmid, view_act_t act) {
+Result *next_view(view_t *previous, view_change_t *changes) {
   view_t *next = malloc(sizeof(view_t));
   if (!next) {
     return result_new_err("Failed to allocate memory for new view");
@@ -45,12 +44,17 @@ Result *next_view(view_t *previous, uint16_t gmid, view_act_t act) {
   // Invalidate the previous view (optional, depending on use case)
   previous->gm_ids = nullptr;
 
-  switch (act) {
-  case V_DROP:
-    return view_remove(next, gmid);
-  case V_ADD:
-    return view_add(next, gmid);
-  default:
-    return result_new_err("Action undefined");
+  for (int i = 0; arrlen(changes); i++) {
+    switch (changes[i].action) {
+    case V_DROP:
+      return view_remove(next, changes->gm_id);
+
+    case V_ADD:
+      return view_add(next, changes->gm_id);
+
+    default:
+      return result_new_err("Action undefined");
+    }
   }
+  return result_new_err("next_view() called without changes");
 }
