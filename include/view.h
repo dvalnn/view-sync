@@ -25,6 +25,9 @@ struct ViewChange {
 };
 typedef struct ViewChange view_change_t;
 
-Result *next_view(view_t *previous, view_change_t *changes);
+Result *init_view(uint16_t *gm_ids, size_t n_ids);
+void view_free(view_t *v);
+
+Result *next_view(view_t *previous, view_change_t *changes, size_t n_changes);
 
 #endif
