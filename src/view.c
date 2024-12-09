@@ -72,12 +72,16 @@ Result *next_view(view_t *previous, view_change_t *changes, size_t n_changes) {
     arrput(next_view->gm_ids, previous->gm_ids[i]);
   }
 
+  if (arrlen(next_view->gm_ids) != arrlen(previous->gm_ids)) {
+    view_free(next_view);
+    return result_new_err("Failed to copy previous view elements to new view");
+  }
+
   // Apply changes
   for (size_t i = 0; i < n_changes; i++) {
     Result *res = exec_view_change(next_view, changes[i]);
     if (result_is_err(res)) {
-      arrfree(next_view->gm_ids); // Free dynamic array
-      free(next_view);            // Free view struct
+      view_free(next_view);
       return res;
     }
   }
@@ -86,6 +90,7 @@ Result *next_view(view_t *previous, view_change_t *changes, size_t n_changes) {
   qsort(next_view->gm_ids, arrlen(next_view->gm_ids), sizeof(uint16_t),
         (int (*)(const void *, const void *))compare_uint16);
 
+  // Success. Free previous view and return new;
   view_free(previous);
   return result_new_ok(next_view);
 }
