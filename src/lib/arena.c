@@ -1,0 +1,3 @@
+#define ARENA_IMPLEMENTATION
+#define ARNA_BACKEND ARENA_BACKEND_LINUX_MMAP
+#include "lib/arena.h"
