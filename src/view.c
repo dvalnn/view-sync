@@ -33,6 +33,7 @@ static Result *view_remove(view_t *view, uint16_t gmid) {
 // Produces new_view from current_view.
 // Destroys current_view.
 // Result ->ok has type (view_t *)
+// TODO: Fix this according to new interface
 Result *next_view(view_t *previous, uint16_t gmid, view_act_t act) {
   view_t *next = malloc(sizeof(view_t));
   if (!next) {

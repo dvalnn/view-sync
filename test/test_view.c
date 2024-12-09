@@ -6,6 +6,7 @@
 
 #include "view.h"
 
+//TODO: fix tests for new interface
 static void test_next_view(void **state) {
   (void)state;
 

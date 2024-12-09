@@ -17,9 +17,14 @@ enum ViewAct {
   V_DROP,
   V_ADD,
 };
-
 typedef enum ViewAct view_act_t;
 
-Result *next_view(view_t *previous, uint16_t gmid, view_act_t act);
+struct ViewChange {
+  uint16_t gm_id;
+  view_act_t action;
+};
+typedef struct ViewChange view_change_t;
+
+Result *next_view(view_t *previous, view_change_t *changes);
 
 #endif
