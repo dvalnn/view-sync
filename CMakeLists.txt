@@ -27,8 +27,11 @@ set(TEST_FILES
 )
 
 # ----- Project compilation ----- # 
-add_executable(view_sync main.c ${SRC_FILES})
-target_compile_options(view_sync PRIVATE -Wall -Wextra -Werror)
+add_executable(${PROJECT_NAME} main.c ${SRC_FILES})
+
+find_package(json-c CONFIG)
+target_link_libraries(${PROJECT_NAME} PRIVATE json-c::json-c)
+target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror)
 
 # ----- Project testing ----- # 
 enable_testing()
@@ -38,7 +41,7 @@ foreach(test_file ${TEST_FILES})
     get_filename_component(test_name "${test_file}" NAME_WE)
 
     add_executable(${test_name} ${test_file} ${SRC_FILES})
-    target_link_libraries(${test_name} PRIVATE cmocka)
+    target_link_libraries(${test_name} PRIVATE cmocka json-c::json-c)
     target_compile_options(${test_name} PRIVATE -Wall -Wextra -Werror)
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()

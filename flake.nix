@@ -27,9 +27,12 @@
         # add library dependencies here i.e.
         #zlib
         cmocka
+        json_c
         # Tipp: you can use `nix-locate foo.h` to find the package that provides a header file, see https://github.com/nix-community/nix-index
       ];
       nativeBuildInputs = with pkgs; [
+        man-pages
+
         # add build dependencies here
         ## For mesonbuild:
         #meson ninja
@@ -53,16 +56,6 @@
         # You can use NIX_LDFLAGS to set the default linker flags for the shell
         #NIX_LDFLAGS = "-L${lib.getLib zstd}/lib -lzstd";
       };
-
-      # Pinned gcc: remain on gcc10 even after `nix flake update`
-      #default = pkgs.mkShell.override { stdenv = pkgs.gcc10Stdenv; } {
-      #  inherit buildInputs nativeBuildInputs;
-      #};
-
-      # Clang example:
-      #default = pkgs.mkShell.override { stdenv = pkgs.clangStdenv; } {
-      #  inherit buildInputs nativeBuildInputs;
-      #};
 
       packages.default = pkgs.stdenv.mkDerivation {
         inherit buildInputs nativeBuildInputs pname version src;
