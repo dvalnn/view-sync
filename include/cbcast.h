@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include <netinet/in.h>
 #include <netinet/udp.h>
 #include <pthread.h>
 #include <sys/socket.h>
@@ -11,6 +12,7 @@
 #include "result.h"
 
 struct CBcast {
+  int socket_fd;
   uint64_t self_pid;
 
   struct CBCPeer {
@@ -32,10 +34,10 @@ typedef struct CBcast cbcast_t;
 typedef struct CBCPeer cbcast_peer_t;
 typedef struct CBCVectorClock cbcast_vclock_t;
 
-Result *cbc_init(uint64_t pid, uint64_t max_p);
+Result *cbc_init(uint64_t pid, uint64_t max_p, uint16_t port);
 void cbc_free(cbcast_t *cbc);
 
-void cbc_send(cbcast_t *cbc, char *msg);
+void cbc_send(cbcast_t *cbc, char *msg, size_t msg_len);
 char *cbc_rcv(cbcast_t *cbc);
 
 #endif
