@@ -558,7 +558,8 @@ extern void * stbds_shmode_func(size_t elemsize, int mode);
 #define stbds_arrmaybegrow(a,n)  ((!(a) || stbds_header(a)->length + (n) > stbds_header(a)->capacity) \
                                   ? (stbds_arrgrow(a,n,0),0) : 0)
 
-#define stbds_arrgrow(a,b,c)   ((a) = stbds_arrgrowf_wrapper((a), sizeof *(a), (b), (c)))
+#define stbds_arrgrow(a,b,c)   ((a) = stbds_arrgrowf_wrapper((a), /*NOLINT(bugprone-sizeof-expression)*/ sizeof *(a), (b), (c)))
+
 
 #define stbds_hmput(t, k, v) \
     ((t) = stbds_hmput_key_wrapper((t), sizeof *(t), (void*) STBDS_ADDRESSOF((t)->key, (k)), sizeof (t)->key, 0),   \

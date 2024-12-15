@@ -15,6 +15,9 @@ set(SRC_FILES
     # project
     src/result.c
     src/view.c
+    src/vector_clock.c
+    src/cbcast/common.c
+    src/cbcast/send.c
 
     # Third party
     src/lib/stb_ds.c
@@ -24,6 +27,8 @@ set(SRC_FILES
 set(TEST_FILES
     test/test_result.c
     test/test_view.c
+    test/test_vector_clock.c
+    test/test_cbcast.c
 )
 
 # ----- Project compilation ----- # 
