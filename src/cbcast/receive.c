@@ -29,8 +29,8 @@ char *cbc_rcv(cbcast_t *cbc) {
   // Step 2: Receive raw data
   struct sockaddr sender_addr;
   socklen_t addr_len = sizeof(sender_addr);
-  recv_len =
-      recvfrom(cbc->socket_fd, buffer, buffer_size, 0, &sender_addr, &addr_len);
+  recv_len = recvfrom(cbc->socket_fd, buffer, buffer_size, MSG_DONTWAIT,
+                      &sender_addr, &addr_len);
   if (recv_len <= 0) {
     free(buffer);
     return NULL; // No data or error in receiving
@@ -57,24 +57,6 @@ char *cbc_rcv(cbcast_t *cbc) {
   cbcast_peer_t *sender = NULL;
   struct sockaddr_in sender_ipv4 = *(struct sockaddr_in *)&sender_addr;
   for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
-    /* printf("checking peer %zu\n", i); */
-    /**/
-    /* char peer_addr[INET_ADDRSTRLEN]; */
-    /* uint32_t peer_port; */
-    /**/
-    /* char sender_addr[INET_ADDRSTRLEN]; */
-    /* uint32_t sender_port; */
-    /**/
-    /* inet_ntop(AF_INET, &cbc->peers[i]->addr->sin_addr, peer_addr, */
-    /*           INET_ADDRSTRLEN); */
-    /* peer_port = ntohs(cbc->peers[i]->addr->sin_port); */
-    /**/
-    /* inet_ntop(AF_INET, &sender_ipv4.sin_addr, sender_addr, INET_ADDRSTRLEN); */
-    /* sender_port = ntohs(sender_ipv4.sin_port); */
-    /**/
-    /* printf("peer: %s:%u, sender: %s:%u\n", peer_addr, peer_port, sender_addr, */
-    /*        sender_port); */
-
     if (memcmp(cbc->peers[i]->addr, &sender_ipv4, sizeof(struct sockaddr_in)) ==
         0) {
       sender = cbc->peers[i];

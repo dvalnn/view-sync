@@ -79,7 +79,7 @@ void cbc_free(cbcast_t *cbc) {
   for (int i = 0; i < arrlen(cbc->sent_buf); i++) {
     free(cbc->sent_buf[i]->payload);  // Free payload
     free(cbc->sent_buf[i]->confirms); // Free confirms
-    free(cbc->sent_buf[i]); // Free the retransmit message struct
+    free(cbc->sent_buf[i]);           // Free the retransmit message struct
   }
   arrfree(cbc->sent_buf);
 
