@@ -45,7 +45,15 @@ char *cbc_rcv(cbcast_t *cbc) {
   struct sockaddr_in sender_ipv4 = *(struct sockaddr_in *)&sender_addr;
   cbcast_peer_t *sender = find_sender(cbc, &sender_ipv4);
   if (!sender) {
-    fprintf(stderr, "[cbc_rcv] Received message from unknown sender\n");
+
+    char ipv4[INET_ADDRSTRLEN];
+    int port = ntohs(sender_ipv4.sin_port);
+    inet_ntop(AF_INET, &sender_ipv4.sin_addr.s_addr, ipv4, INET_ADDRSTRLEN);
+
+    fprintf(
+        stderr,
+        "[cbc_rcv] Cbc pid %lu received message from unknown sender %s:%d\n",
+        cbc->pid, ipv4, port);
     free(buffer);
     return NULL;
   }
@@ -53,6 +61,8 @@ char *cbc_rcv(cbcast_t *cbc) {
   // Step 4: Handle the message
   int causal_result = vc_check_causality(cbc->vclock, sender->pid, timestamp);
   if (causal_result == 0) {
+    printf("cbc pid %lu received message %lu from peer %lu\n", cbc->pid,
+           timestamp, sender->pid);
     arrput(cbc->delivery_queue, strdup(message)); // Copy to delivery queue
     vc_inc(cbc->vclock, sender->pid);             // Update vector clock
 

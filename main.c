@@ -1,54 +1,160 @@
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/types.h>
+#include <string.h>
+#include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
-int main(int argc, char **argv) {
-  if (argc != 2) {
-    printf("Usage: ./view_sync <n_child_proc>\n");
-    return -1;
+#include "cbcast.h" // Include your cbcast header
+
+#define NUM_WORKERS 5
+#define BASE_PORT 12345
+#define SHM_NAME "/cbc_sync"
+
+static volatile int running = 1;
+
+void sigint_handler(int sig) {
+  (void)sig;
+  running = 0;
+}
+
+// Worker function for broadcasting and receiving messages
+void worker_process(cbcast_t *cbc, volatile int *sync_state) {
+  printf("Worker %lu starting (PID: %d)\n", cbc->pid, getpid());
+
+  // Step 1: Notify setup completion
+  sync_state[cbc->pid] = 1;
+
+  // Step 2: Wait for all workers to complete setup
+  while (running) {
+    int all_ready = 1;
+    for (int i = 0; i < NUM_WORKERS; i++) {
+      if (sync_state[i] == 0) {
+        all_ready = 0;
+        break;
+      }
+    }
+    if (all_ready)
+      break;
+    usleep(10000); // Sleep for 10ms to avoid busy-waiting
   }
 
-  // Convert argument to integer
-  int n_child_proc = atoi(argv[1]);
-  if (n_child_proc <= 0) {
-    printf("Error: Number of child processes must be a positive integer.\n");
-    return -1;
+  printf("Worker %lu starting broadcast phase.\n", cbc->pid);
+
+  while (running) {
+    char *received_msg = cbc_rcv(cbc);
+    if (received_msg) {
+      printf("Worker %lu received: \"%s\"\n", cbc->pid, received_msg);
+      free(received_msg);
+    }
+
+    // Broadcast a message periodically
+    static int counter = 0;
+    if (++counter % 5 == 0) {
+      char message[64];
+      snprintf(message, sizeof(message), "Hello from worker %lu!", cbc->pid);
+      cbc_send(cbc, message, strlen(message) + 1); // Include null-terminator
+    }
+
+    usleep(250000); // Sleep to simulate processing
   }
 
-  printf("[Parent] Spawning %d children\n", n_child_proc);
-  for (int i = 0; i < n_child_proc; i++) {
+  printf("Worker %lu shutting down.\n", cbc->pid);
+  cbc_free(cbc);
+  exit(0);
+}
+
+int main() {
+  signal(SIGINT, sigint_handler); // Handle Ctrl+C to stop workers
+
+  pid_t pids[NUM_WORKERS] = {0};
+  int shm_fd = -1;
+  volatile int *sync_state = NULL;
+
+  // Step 1: Create shared memory for synchronization
+  shm_fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666);
+  if (shm_fd < 0) {
+    perror("shm_open");
+    exit(EXIT_FAILURE);
+  }
+
+  if (ftruncate(shm_fd, NUM_WORKERS * sizeof(int)) < 0) {
+    perror("ftruncate");
+    shm_unlink(SHM_NAME);
+    exit(EXIT_FAILURE);
+  }
+
+  sync_state = mmap(NULL, NUM_WORKERS * sizeof(int), PROT_READ | PROT_WRITE,
+                    MAP_SHARED, shm_fd, 0);
+  if (sync_state == MAP_FAILED) {
+    perror("mmap");
+    shm_unlink(SHM_NAME);
+    exit(EXIT_FAILURE);
+  }
+
+  memset((void *)sync_state, 0,
+         NUM_WORKERS * sizeof(int)); // Initialize sync state
+
+  // Step 2: Fork worker processes
+  for (uint64_t i = 0; i < NUM_WORKERS; i++) {
     pid_t pid = fork();
-    if (pid == -1) {
-      perror("[Parent] fork failed");
-      return -1;
-    }
     if (pid == 0) {
-      // Child process
-      printf("[Child %d] Hello world!\n", getpid());
-      return 0; // Exit child process
+      // Child process: Initialize cbcast instance
+      uint16_t port = BASE_PORT + i;
+      Result *result = cbc_init(i, NUM_WORKERS, port);
+      if (!result_is_ok(result)) {
+        fprintf(stderr, "Failed to initialize cbcast for worker %lu\n", i);
+        exit(EXIT_FAILURE);
+      }
+
+      cbcast_t *cbc = result_unwrap(result);
+
+      // Add peers to this cbcast instance
+      for (uint64_t j = 0; j < NUM_WORKERS; j++) {
+        if (j == i)
+          continue; // Skip self
+
+        struct sockaddr_in peer_addr = {0};
+        peer_addr.sin_family = AF_INET;
+        peer_addr.sin_port = htons(BASE_PORT + j);
+        peer_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+        if (cbc_add_peer(cbc, j, &peer_addr) != 0) {
+          fprintf(stderr, "Worker %lu: Failed to add peer %lu\n", i, j);
+        }
+      }
+
+      worker_process(cbc, sync_state); // Start the worker process
+    } else if (pid > 0) {
+      pids[i] = pid; // Store child PID for later cleanup
     } else {
-      // Parent process
-      printf("[Parent] Created child with PID %d\n", pid);
+      perror("fork");
+      shm_unlink(SHM_NAME);
+      exit(EXIT_FAILURE);
     }
   }
 
-  // Parent waits for all child processes
-  for (int i = 0; i < n_child_proc; i++) {
-    int status;
-    pid_t child_pid = wait(&status);
-    if (child_pid == -1) {
-      perror("[Parent] wait failed");
-      return -1;
-    }
-    if (WIFEXITED(status)) {
-      printf("[Parent] Child %d exited with status %d\n", child_pid,
-             WEXITSTATUS(status));
-    } else {
-      printf("[Parent] Child %d terminated abnormally\n", child_pid);
+  // Step 3: Parent process waits for termination
+  printf("Press Ctrl+C to stop workers...\n");
+  while (running) {
+    pause(); // Wait for a signal
+  }
+
+  printf("Terminating workers...\n");
+  for (int i = 0; i < NUM_WORKERS; i++) {
+    if (pids[i] > 0) {
+      kill(pids[i], SIGINT);     // Send SIGINT to each child
+      waitpid(pids[i], NULL, 0); // Wait for each child to exit
     }
   }
 
+  // Cleanup shared memory
+  munmap((void *)sync_state, NUM_WORKERS * sizeof(int));
+  shm_unlink(SHM_NAME);
+
+  printf("All workers terminated.\n");
   return 0;
 }
