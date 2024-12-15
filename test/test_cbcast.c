@@ -101,6 +101,14 @@ static void test_cbcast_send(void **state) {
                    strlen(message) + 2 * sizeof(uint64_t));
   assert_int_equal(arrlen(cbc->peers), 2);
 
+  uint64_t ts = *(uint64_t *)sent_msg->payload;
+  uint64_t len = *(uint64_t *)(sent_msg->payload + sizeof(uint64_t));
+  char *sent = (sent_msg->payload + 2 * sizeof(uint64_t));
+
+  assert_int_equal(ts, 1);
+  assert_int_equal(len, strlen(message));
+  assert_string_equal(sent, message);
+
   // Check confirms are initialized
   for (int i = 0; i < arrlen(cbc->peers); i++) {
     assert_int_equal(sent_msg->confirms[i], 0);

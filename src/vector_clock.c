@@ -49,7 +49,7 @@ Result *vc_inc(vector_clock_t *vc, uint64_t pos) {
   }
 
   pthread_mutex_lock(&vc->mtx);
-  uint64_t incd = vc->clock[pos]++;
+  uint64_t incd = ++vc->clock[pos];
   pthread_mutex_unlock(&vc->mtx);
 
   return result_new_ok(&incd);

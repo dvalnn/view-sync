@@ -55,9 +55,9 @@ static Result *cbc_create_payload(uint64_t ts, char *msg, size_t msg_len) {
   }
 
   // Copy vector clock and message into the payload
-  payload[0] = ts;
-  payload[1] = msg_len;
-  memcpy(payload + 2 * sizeof(uint64_t), msg, msg_len);
+  memcpy(payload, &ts, sizeof(ts));
+  memcpy(payload + sizeof(ts), &msg_len, sizeof(msg_len));
+  memcpy(payload + sizeof(ts) + sizeof(msg_len), msg, msg_len);
 
   return result_new_ok(payload);
 }
@@ -87,7 +87,6 @@ static Result *cbc_store_sent_message(cbcast_t *cbc, char *payload,
   if (!out) {
     return result_new_err("[cbc_store_sent_message] malloc out");
   }
-
   out->confirms = malloc(sizeof(char) * arrlen(cbc->peers));
   memset(out->confirms, 0, arrlen(cbc->peers));
 
