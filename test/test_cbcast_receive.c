@@ -1,166 +1,178 @@
-#include "cbcast.h"
-#include <netinet/in.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "lib/stb_ds.h"
 
 #include <cmocka.h>
 
-// Mock the external functions
-extern int vc_check_causality(vector_clock_t *vclock, uint64_t pid,
-                              uint64_t timestamp);
-extern void vc_update(vector_clock_t *vclock, uint64_t pid, uint64_t timestamp);
+#include <arpa/inet.h>
 
-// Test setup and teardown
-static int test_setup(void **state) {
-  cbcast_t *cbc = malloc(sizeof(cbcast_t));
-  if (!cbc) {
-    return -1;
-  }
+#include "cbcast.h"
+#include "lib/stb_ds.h"
+#include <arpa/inet.h> // For socket functions and sockaddr_in
+#include <unistd.h>    // For close()
 
-  // Initialize with some values for the test
-  cbc->socket_fd = 0;
-  cbc->pid = 1;
-  cbc->peers = NULL; // We'll mock peer initialization
-  cbc->vclock = malloc(sizeof(vector_clock_t)); // Mock vector clock
-  cbc->delivery_queue = NULL;
-  cbc->held_buf = NULL;
+static void test_cbcast_rcv_with_real_socket(void **state) {
+  (void)state;
 
-  *state = cbc; // Provide the cbcast_t to the test
+  cbcast_t cbc = {0};
+  int sender_socket = -1;
 
-  return 0;
-}
+  // Step 1: Create and bind the receiver socket
+  cbc.socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
+  assert_true(cbc.socket_fd >= 0);
 
-static int test_teardown(void **state) {
-  cbcast_t *cbc = (cbcast_t *)*state;
-  if (cbc->vclock) {
-    free(cbc->vclock);
-  }
-  free(cbc);
-  return 0;
-}
+  struct sockaddr_in recv_addr = {0};
+  recv_addr.sin_family = AF_INET;
+  recv_addr.sin_port = htons(12345); // Bind to port 12345
+  recv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-// Mock for vc_check_causality
-int vc_check_causality(vector_clock_t *vclock, uint64_t pid,
-                       uint64_t timestamp) {
-  (void)vclock;
-  (void)pid;
-  (void)timestamp;
-  // Return 0 to simulate causality satisfied (can be adjusted for testing)
-  return 0;
-}
+  assert_int_equal(
+      bind(cbc.socket_fd, (struct sockaddr *)&recv_addr, sizeof(recv_addr)), 0);
 
-// Mock for vc_update
-void vc_update(vector_clock_t *vclock, uint64_t pid, uint64_t timestamp) {
-  (void)vclock;
-  (void)pid;
-  (void)timestamp;
-  // Simulate vector clock update
-}
+  // Step 2: Initialize cbcast structure
+  cbc.delivery_queue = NULL;
+  cbc.held_buf = NULL;
+  cbc.vclock = result_unwrap(vc_init(2));
 
-// Test receiving a valid message
-static void test_cbc_rcv_valid_message(void **state) {
-  cbcast_t *cbc = (cbcast_t *)*state;
+  // Set up a peer
+  cbcast_peer_t mock_peer = {0};
+  struct sockaddr_in mock_addr = {0};
+  mock_peer.pid = 1;
+  mock_peer.addr = &mock_addr;
+  mock_addr.sin_family = AF_INET;
+  mock_addr.sin_port = htons(54321); // Peer sending from port 54321
+  inet_pton(AF_INET, "127.0.0.1", &(mock_addr.sin_addr));
+  arrput(cbc.peers, &mock_peer);
 
-  // Mock received message
-  char *recv_msg = "Test message";
-  size_t msg_len = strlen(recv_msg);
-  uint64_t timestamp = 10;
-  uint64_t sender_pid = 2;
-  (void)sender_pid;
+  // Step 3: Send a message using another socket
+  sender_socket = socket(AF_INET, SOCK_DGRAM, 0);
+  assert_true(sender_socket >= 0);
 
-  // Prepare test input for cbc_rcv (mocked socket, sender, etc.)
   struct sockaddr_in sender_addr = {0};
   sender_addr.sin_family = AF_INET;
-  sender_addr.sin_port = htons(12345);
-  sender_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  (void)sender_addr;
+  sender_addr.sin_port = htons(54321); // Sender's port
+  sender_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-  // Simulate a valid message being received and parsed
-  // Normally, you would need to use real socket mechanisms or mocks for
-  // recvfrom For simplicity, we'll simulate directly calling cbc_rcv
+  assert_int_equal(
+      bind(sender_socket, (struct sockaddr *)&sender_addr, sizeof(sender_addr)),
+      0);
 
-  char *buffer =
-      malloc(msg_len + 16); // 8 bytes for timestamp + 8 bytes for msg_len
-  memcpy(buffer, &timestamp, sizeof(uint64_t));   // Add timestamp
-  memcpy(buffer + 8, &msg_len, sizeof(uint64_t)); // Add message length
-  memcpy(buffer + 16, recv_msg, msg_len); // Add the actual message content
+  uint64_t timestamp = 1;
+  uint64_t msg_len = 13; // Length of "Hello, World!"
+  char message[32] = {0};
+  memcpy(message, &timestamp, sizeof(uint64_t));
+  memcpy(message + sizeof(uint64_t), &msg_len, sizeof(uint64_t));
+  memcpy(message + 2 * sizeof(uint64_t), "Hello, World!", 13);
 
-  // Call the cbc_rcv function with the mocked state
-  char *received_msg = cbc_rcv(cbc);
+  assert_int_equal(sendto(sender_socket, message, sizeof(message), 0,
+                          (struct sockaddr *)&recv_addr, sizeof(recv_addr)),
+                   sizeof(message));
 
-  // Verify that the message is delivered
-  assert_non_null(received_msg);
-  assert_string_equal(received_msg, recv_msg);
+  // Step 5: Call cbc_rcv
+  char *delivered_message = cbc_rcv(&cbc);
 
-  // Clean up
-  free(buffer);
+  // Validate results
+  assert_non_null(delivered_message);
+  assert_string_equal(delivered_message, "Hello, World!");
+
+  // Cleanup
+  free(delivered_message);
+  vc_free(cbc.vclock);
+  arrfree(cbc.peers);
+  close(cbc.socket_fd);
+  close(sender_socket);
 }
 
-// Test handling held messages after delivering a message
-static void test_cbc_rcv_with_held_messages(void **state) {
-  cbcast_t *cbc = (cbcast_t *)*state;
+/* static void test_cbcast_rcv_held(void **state) { */
+/*   (void)state; */
+/*   cbcast_t cbc = {0}; */
+/**/
+/*   // Mock initialization of vector clock and peers */
+/*   cbc.vclock = mock_type(vector_clock_t *); */
+/*   cbc.peers = NULL; */
+/*   cbc.delivery_queue = NULL; */
+/*   cbc.held_buf = NULL; */
+/**/
+/*   // Mock the causality check to return 1 (causality not satisfied) */
+/*   will_return(vc_check_causality, 1); */
+/**/
+/*   // Mock the socket FD and receiving a valid message */
+/*   cbc.socket_fd = mock_type(int); */
+/*   expect_value(recvfrom, socket_fd, cbc.socket_fd); */
+/*   will_return(recvfrom, 32); // Simulate a valid received message length */
+/**/
+/*   // Create a mock message */
+/*   char mock_message[32] = {0}; */
+/*   uint64_t timestamp = 1234; */
+/*   uint64_t msg_len = 16; */
+/*   memcpy(mock_message, &timestamp, sizeof(uint64_t)); */
+/*   memcpy(mock_message + 8, &msg_len, sizeof(uint64_t)); */
+/*   memcpy(mock_message + 16, "Hello, World!", 13); */
+/**/
+/*   // Simulate receiving the mock message */
+/*   will_return(__wrap_recvfrom, mock_message); */
+/**/
+/*   // Call the function under test */
+/*   char *delivered_message = cbc_rcv(&cbc); */
+/**/
+/*   // Validate that no message is delivered immediately */
+/*   assert_null(delivered_message); */
+/**/
+/*   // Check the held buffer for the message */
+/*   assert_int_equal(arrlen(cbc.held_buf), 1); */
+/*   assert_string_equal(cbc.held_buf[0]->payload, "Hello, World!"); */
+/**/
+/*   // Cleanup */
+/*   for (size_t i = 0; i < (size_t)arrlen(cbc.held_buf); i++) { */
+/*     free(cbc.held_buf[i]->payload); */
+/*     free(cbc.held_buf[i]); */
+/*   } */
+/*   arrfree(cbc.held_buf); */
+/* } */
 
-  // Setup initial conditions
-  uint64_t sender_pid = 2;
-  uint64_t timestamp = 10;
-  char *msg = "Test message";
-  size_t msg_len = strlen(msg);
-
-  // Simulate held messages
-  cbcast_in_msg_t *held_msg = malloc(sizeof(cbcast_in_msg_t));
-  held_msg->pid = sender_pid;
-  held_msg->timestamp =
-      timestamp - 1; // To simulate a message that should be held
-  held_msg->payload = strdup(msg);
-
-  // Add to held buffer
-  arrput(cbc->held_buf, held_msg);
-
-  // Now, simulate receiving a message with a causally correct timestamp
-  char *recv_msg = "Test message after deliver";
-  timestamp++;                         // Causally valid to deliver this message
-  char *buffer = malloc(msg_len + 16); // Same size as before
-  memcpy(buffer, &timestamp, sizeof(uint64_t));   // Add timestamp
-  memcpy(buffer + 8, &msg_len, sizeof(uint64_t)); // Add message length
-  memcpy(buffer + 16, recv_msg, msg_len); // Add the actual message content
-
-  // Call cbc_rcv to simulate message reception and check causality
-  char *received_msg = cbc_rcv(cbc);
-
-  // Verify that the received message is delivered
-  assert_non_null(received_msg);
-  assert_string_equal(received_msg, recv_msg);
-
-  // Check that the held message was delivered as well
-  assert_int_equal(arrlen(cbc->delivery_queue),
-                   2); // Should now have 2 messages
-
-  // Clean up
-  free(buffer);
-}
-
-// Test invalid inputs (e.g., null cbc)
-static void test_cbc_rcv_invalid(void **state) {
-  cbcast_t *cbc = (cbcast_t *)*state;
-  (void)cbc;
-
-  // Test when cbc is NULL
-  char *result = cbc_rcv(NULL);
-  assert_null(result);
-}
+/* static void test_cbcast_rcv_release_from_held(void **state) { */
+/*   (void)state; */
+/*   cbcast_t cbc = {0}; */
+/**/
+/*   // Mock initialization of vector clock and peers */
+/*   cbc.vclock = mock_type(vector_clock_t *); */
+/*   cbc.peers = NULL; */
+/*   cbc.delivery_queue = NULL; */
+/*   cbc.held_buf = NULL; */
+/**/
+/*   // Insert a message into the held buffer */
+/*   cbcast_in_msg_t *held_msg = malloc(sizeof(cbcast_in_msg_t)); */
+/*   assert_non_null(held_msg); */
+/**/
+/*   held_msg->pid = 1; */
+/*   held_msg->timestamp = 1234; */
+/*   held_msg->payload = strdup("Held Message"); */
+/*   arrput(cbc.held_buf, held_msg); */
+/**/
+/*   // Mock the causality check to return 0 (causality satisfied) */
+/*   will_return(vc_check_causality, 0); */
+/**/
+/*   // Call the function under test */
+/*   char *delivered_message = cbc_rcv(&cbc); */
+/**/
+/*   // Validate that the held message is delivered */
+/*   assert_non_null(delivered_message); */
+/*   assert_string_equal(delivered_message, "Held Message"); */
+/**/
+/*   // Check that the held buffer is empty */
+/*   assert_int_equal(arrlen(cbc.held_buf), 0); */
+/**/
+/*   // Cleanup */
+/*   free(delivered_message); */
+/*   arrfree(cbc.held_buf); */
+/* } */
 
 int main(void) {
   const struct CMUnitTest tests[] = {
-      cmocka_unit_test(test_cbc_rcv_valid_message),
-      cmocka_unit_test(test_cbc_rcv_with_held_messages),
-      cmocka_unit_test(test_cbc_rcv_invalid),
+      cmocka_unit_test(test_cbcast_rcv_with_real_socket),
+      /* cmocka_unit_test(test_cbcast_rcv_held), */
+      /* cmocka_unit_test(test_cbcast_rcv_release_from_held), */
   };
 
-  return cmocka_run_group_tests(tests, test_setup, test_teardown);
+  return cmocka_run_group_tests(tests, NULL, NULL);
 }

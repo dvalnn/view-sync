@@ -18,6 +18,7 @@ set(SRC_FILES
     src/vector_clock.c
     src/cbcast/common.c
     src/cbcast/send.c
+    src/cbcast/receive.c
 
     # Third party
     src/lib/stb_ds.c

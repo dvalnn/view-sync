@@ -1,10 +1,11 @@
 #include "cbcast.h"
 #include "lib/stb_ds.h"
+#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-int vc_check_causality(vector_clock_t *vclock, uint64_t pid,
-                       uint64_t timestamp) {
+static int vc_check_causality(vector_clock_t *vclock, uint64_t pid,
+                              uint64_t timestamp) {
   uint64_t current = vclock->clock[pid];
   return (timestamp == current + 1) ? 0 : -1; // 0 = deliverable, -1 = hold
 }
@@ -25,12 +26,11 @@ char *cbc_rcv(cbcast_t *cbc) {
     return NULL;
   }
 
-  struct sockaddr_in sender_addr;
-  socklen_t addr_len = sizeof(sender_addr);
-
   // Step 2: Receive raw data
-  recv_len = recvfrom(cbc->socket_fd, buffer, buffer_size, 0,
-                      (struct sockaddr *)&sender_addr, &addr_len);
+  struct sockaddr sender_addr;
+  socklen_t addr_len = sizeof(sender_addr);
+  recv_len =
+      recvfrom(cbc->socket_fd, buffer, buffer_size, 0, &sender_addr, &addr_len);
   if (recv_len <= 0) {
     free(buffer);
     return NULL; // No data or error in receiving
@@ -55,8 +55,27 @@ char *cbc_rcv(cbcast_t *cbc) {
 
   // Identify the sender's PID
   cbcast_peer_t *sender = NULL;
+  struct sockaddr_in sender_ipv4 = *(struct sockaddr_in *)&sender_addr;
   for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
-    if (memcmp(cbc->peers[i]->addr, &sender_addr, sizeof(struct sockaddr_in)) ==
+    /* printf("checking peer %zu\n", i); */
+    /**/
+    /* char peer_addr[INET_ADDRSTRLEN]; */
+    /* uint32_t peer_port; */
+    /**/
+    /* char sender_addr[INET_ADDRSTRLEN]; */
+    /* uint32_t sender_port; */
+    /**/
+    /* inet_ntop(AF_INET, &cbc->peers[i]->addr->sin_addr, peer_addr, */
+    /*           INET_ADDRSTRLEN); */
+    /* peer_port = ntohs(cbc->peers[i]->addr->sin_port); */
+    /**/
+    /* inet_ntop(AF_INET, &sender_ipv4.sin_addr, sender_addr, INET_ADDRSTRLEN); */
+    /* sender_port = ntohs(sender_ipv4.sin_port); */
+    /**/
+    /* printf("peer: %s:%u, sender: %s:%u\n", peer_addr, peer_port, sender_addr, */
+    /*        sender_port); */
+
+    if (memcmp(cbc->peers[i]->addr, &sender_ipv4, sizeof(struct sockaddr_in)) ==
         0) {
       sender = cbc->peers[i];
       break;
@@ -72,6 +91,7 @@ char *cbc_rcv(cbcast_t *cbc) {
   // Step 4: Handle the message based on causality
   int causal_result = vc_check_causality(cbc->vclock, sender->pid, timestamp);
   if (causal_result == 0) {
+    printf("causal message received\n");
     // Causality satisfied; deliver the message
     arrput(cbc->delivery_queue, strdup(message)); // Copy to delivery queue
     vc_inc(cbc->vclock, sender->pid);             // Update vector clock
@@ -96,6 +116,7 @@ char *cbc_rcv(cbcast_t *cbc) {
     }
   } else {
     // Causality not satisfied; hold the message
+    printf("not causal message received\n");
     cbcast_in_msg_t *held_msg = malloc(sizeof(cbcast_in_msg_t));
     if (!held_msg) {
       fprintf(stderr, "[cbc_rcv] Failed to allocate held message\n");
