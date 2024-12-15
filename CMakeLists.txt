@@ -29,6 +29,7 @@ set(TEST_FILES
     test/test_view.c
     test/test_vector_clock.c
     test/test_cbcast.c
+    test/test_cbcast_receive.c
 )
 
 # ----- Project compilation ----- # 

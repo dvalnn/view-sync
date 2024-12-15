@@ -69,11 +69,3 @@ Result *vc_snapshot(vector_clock_t *vc) {
 
   return result_new_ok(snap_vec);
 }
-
-Result *vc_merge(vector_clock_t *vc_a, vector_clock_t *vc_b) {
-  if (!vc_a || vc_b) {
-    return result_new_err("[vc_merge] invalid args");
-  }
-
-  return RESULT_UNIMPLEMENTED;
-}
