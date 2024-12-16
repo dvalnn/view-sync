@@ -1,3 +1,4 @@
+#include "arpa/inet.h"
 #include "cbcast.h"
 #include "lib/stb_ds.h"
 #include "unistd.h"
@@ -90,45 +91,48 @@ void cbc_free(cbcast_t *cbc) {
   free(cbc);
 }
 
-int cbc_add_peer(cbcast_t *cbc, uint64_t pid, const struct sockaddr_in *addr) {
-  if (!cbc || !addr) {
-    fprintf(stderr, "[cbc_add_peer] Invalid arguments\n");
-    return -1;
+Result *cbc_add_peer(cbcast_t *cbc, const uint64_t pid, const char *ipv4,
+                     const uint16_t port) {
+  if (!cbc || !ipv4 || !pid || !port) {
+    return result_new_err("[cbc_add_peer] Invalid arguments\n");
   }
 
   // Check if the peer already exists
   for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
     if (cbc->peers[i]->pid == pid) {
-      fprintf(stderr, "[cbc_add_peer] Peer with PID %lu already exists\n", pid);
-      return -1;
+      const char *fmt = "[cbc_add_peer] Peer with PID %lu already exists\n";
+      char err[strlen(fmt) + 20];
+      sprintf(err, fmt, pid);
+      return result_new_err(err);
     }
   }
 
   // Allocate memory for the new peer
   cbcast_peer_t *new_peer = malloc(sizeof(cbcast_peer_t));
   if (!new_peer) {
-    fprintf(stderr, "[cbc_add_peer] Failed to allocate memory for peer\n");
-    return -1;
+    return result_new_err(
+        "[cbc_add_peer] Failed to allocate memory for new peer\n");
   }
-
-  // Allocate and copy the address
-  struct sockaddr_in *new_addr = malloc(sizeof(struct sockaddr_in));
-  if (!new_addr) {
-    fprintf(stderr, "[cbc_add_peer] Failed to allocate memory for address\n");
+  new_peer->addr = malloc(sizeof(*new_peer->addr));
+  if (!new_peer->addr) {
     free(new_peer);
-    return -1;
+    return result_new_err(
+        "[cbc_add_peer] Failed to allocate memory for new peer address\n");
   }
-
-  memcpy(new_addr, addr, sizeof(struct sockaddr_in));
 
   // Initialize the peer
   new_peer->pid = pid;
-  new_peer->addr = new_addr;
+  new_peer->addr->sin_family = AF_INET;
+  new_peer->addr->sin_port = htons(port);
+  if (!inet_aton(ipv4, &new_peer->addr->sin_addr)) {
+    free(new_peer->addr);
+    free(new_peer);
+    return result_new_err("[cbc_add_peer] Invalid IPV4 address");
+  }
 
   // Add the new peer to the peers array
   arrput(cbc->peers, new_peer);
 
   printf("[cbc_add_peer] Added peer with PID %lu\n", pid);
-
   return 0;
 }

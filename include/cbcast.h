@@ -52,5 +52,7 @@ void cbc_free(cbcast_t *cbc);
 void cbc_send(cbcast_t *cbc, char *msg, size_t msg_len);
 char *cbc_rcv(cbcast_t *cbc);
 
-int cbc_add_peer(cbcast_t *cbc, uint64_t pid, const struct sockaddr_in *addr);
+Result *cbc_add_peer(cbcast_t *cbc, const uint64_t pid, const char *ipv4,
+                     const uint16_t port);
+
 #endif

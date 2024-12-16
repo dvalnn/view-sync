@@ -116,13 +116,7 @@ int main() {
       for (uint64_t j = 0; j < NUM_WORKERS; j++) {
         if (j == i)
           continue; // Skip self
-
-        struct sockaddr_in peer_addr = {0};
-        peer_addr.sin_family = AF_INET;
-        peer_addr.sin_port = htons(BASE_PORT + j);
-        peer_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-
-        if (cbc_add_peer(cbc, j, &peer_addr) != 0) {
+        if (cbc_add_peer(cbc, j, "localhost", BASE_PORT + j) != 0) {
           fprintf(stderr, "Worker %lu: Failed to add peer %lu\n", i, j);
         }
       }
