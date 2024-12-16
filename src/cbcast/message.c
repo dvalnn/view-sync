@@ -118,7 +118,7 @@ Result *cbc_msg_deserialize(const char *bytes) {
 
   // Debug output
   printf("[cbc_msg_deserialize] Deserialized message: kind=%d, "
-         "clock=%d, len=%d, payload=%s\n",
+         "clock=%d, len=%d, payload=\"%s\"\n",
          msg->header->kind, msg->header->clock, msg->header->len, msg->payload);
 
   return result_new_ok(msg);

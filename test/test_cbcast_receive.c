@@ -261,13 +261,13 @@ static void test_cbcast_rcv_release_from_held(void **state) {
   assert_string_equal(delivered_message, msg);
   assert_int_equal(arrlen(cbc->delivery_queue), 1);
   assert_non_null(cbc->delivery_queue[0]);
-  assert_string_equal(cbc->delivery_queue[0], "Hello, World! 2");
+  assert_string_equal(cbc->delivery_queue[0], "Hello, World! 3");
+  free(delivered_message);
 
   delivered_message = cbc_rcv(cbc);
   assert_non_null(delivered_message);
-  assert_string_equal(delivered_message, msg);
-  assert_int_equal(arrlen(cbc->delivery_queue), 0);
   assert_string_equal(delivered_message, "Hello, World! 3");
+  assert_int_equal(arrlen(cbc->delivery_queue), 0);
 }
 
 int main(void) {
