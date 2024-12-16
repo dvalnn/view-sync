@@ -66,7 +66,7 @@ void cbc_free(cbcast_t *cbc) {
   // Free held buffer
   for (int i = 0; i < arrlen(cbc->held_buf); i++) {
     cbc_msg_free(cbc->held_buf[i]->message); // Free payload string
-    free(cbc->held_buf[i]);          // Free the message struct
+    free(cbc->held_buf[i]);                  // Free the message struct
   }
   arrfree(cbc->held_buf);
 
@@ -93,7 +93,7 @@ void cbc_free(cbcast_t *cbc) {
 
 Result *cbc_add_peer(cbcast_t *cbc, const uint64_t pid, const char *ipv4,
                      const uint16_t port) {
-  if (!cbc || !ipv4 || !pid || !port) {
+  if (!cbc || !ipv4 || !port) {
     return result_new_err("[cbc_add_peer] Invalid arguments\n");
   }
 
@@ -134,5 +134,5 @@ Result *cbc_add_peer(cbcast_t *cbc, const uint64_t pid, const char *ipv4,
   arrput(cbc->peers, new_peer);
 
   printf("[cbc_add_peer] Added peer with PID %lu\n", pid);
-  return 0;
+  return result_new_ok(NULL);
 }

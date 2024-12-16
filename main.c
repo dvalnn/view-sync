@@ -45,11 +45,10 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
   printf("Worker %lu starting broadcast phase.\n", cbc->pid);
 
   while (running) {
-    /* char *received_msg = cbc_rcv(cbc); */
-    char *received_msg = "Hello";
+    char *received_msg = cbc_rcv(cbc);
     if (received_msg) {
       printf("Worker %lu received: \"%s\"\n", cbc->pid, received_msg);
-      /* free(received_msg); */
+      free(received_msg);
     }
 
     // Broadcast a message periodically
@@ -57,8 +56,13 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
     if (++counter % 5 == 0) {
       char message[64];
       snprintf(message, sizeof(message), "Hello from worker %lu!", cbc->pid);
-      /* cbc_send(cbc, message, strlen(message) + 1); // Include null-terminator
-       */
+      cbcast_msg_hdr_t *hdr =
+          result_expect(cbc_msg_create_header(CBC_DATA, strlen(message)),
+                        "[worker_process] could not create message header");
+      cbcast_msg_t *msg =
+          result_expect(cbc_msg_create(hdr, message),
+                        "[worker_process] could not create message");
+      cbc_send(cbc, msg);
     }
 
     usleep(250000); // Sleep to simulate processing
@@ -118,9 +122,7 @@ int main() {
       for (uint64_t j = 0; j < NUM_WORKERS; j++) {
         if (j == i)
           continue; // Skip self
-        if (cbc_add_peer(cbc, j, "localhost", BASE_PORT + j) != 0) {
-          fprintf(stderr, "Worker %lu: Failed to add peer %lu\n", i, j);
-        }
+        result_unwrap(cbc_add_peer(cbc, j, "127.0.0.1", BASE_PORT + j));
       }
 
       worker_process(cbc, sync_state); // Start the worker process
