@@ -12,19 +12,35 @@
 #include "result.h"
 #include "vector_clock.h"
 
+#ifndef CBC_Q_LEN
 #define CBC_Q_LEN 20
+#endif
 
-struct CBcastInMessage {
-  uint64_t pid;
-  uint64_t timestamp;
+enum CBcastMessageType {
+  CBC_HEARTBEAT = 0,
+  CBC_RETRANSMIT,
+  CBC_DATA,
+};
+typedef enum CBcastMessageType cbcast_msg_kind_t;
+
+struct __attribute__((packed)) CBcastMessageHeader {
+  cbcast_msg_kind_t kind;
+  uint16_t pid;
+  uint16_t clock;
+  uint16_t len;
+};
+typedef struct CBcastMessageHeader cbcast_msg_hdr_t;
+
+struct CBcastMessage {
+  cbcast_msg_hdr_t *header;
   char *payload;
 };
-typedef struct CBcastInMessage cbcast_in_msg_t;
+typedef struct CBcastMessage cbcast_msg_t;
 
+// TODO: Melhor nome para isto
 struct CBcastOutMessage {
+  cbcast_msg_t *message;
   char *confirms;
-  char *payload;
-  size_t payload_len;
 };
 typedef struct CBcastOutMessage cbcast_out_msg_t;
 
@@ -40,19 +56,32 @@ struct CBcast {
   } **peers;
 
   char **delivery_queue;
-  cbcast_in_msg_t **held_buf;
+  cbcast_msg_t **held_buf;
   cbcast_out_msg_t **sent_buf;
 };
 typedef struct CBcast cbcast_t;
 typedef struct CBCPeer cbcast_peer_t;
 
+// common.c
 Result *cbc_init(uint64_t pid, uint64_t max_p, uint16_t port);
 void cbc_free(cbcast_t *cbc);
 
-void cbc_send(cbcast_t *cbc, char *msg, size_t msg_len);
-char *cbc_rcv(cbcast_t *cbc);
-
 Result *cbc_add_peer(cbcast_t *cbc, const uint64_t pid, const char *ipv4,
                      const uint16_t port);
+// message.c
+Result *cbc_msg_create_header(cbcast_msg_kind_t kind, uint16_t pid,
+                              uint16_t len);
+
+Result *cbc_msg_create(cbcast_msg_hdr_t *header, char *payload);
+void cbc_msg_free(cbcast_msg_t *msg);
+
+char *cbc_msg_serialize(const cbcast_msg_t *msg);
+Result *cbc_msg_deserialize(const char *bytes);
+
+// receive.c
+char *cbc_rcv(cbcast_t *cbc);
+
+// send.c
+void cbc_send(cbcast_t *cbc, cbcast_msg_t *msg);
 
 #endif

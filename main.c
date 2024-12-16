@@ -45,10 +45,11 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
   printf("Worker %lu starting broadcast phase.\n", cbc->pid);
 
   while (running) {
-    char *received_msg = cbc_rcv(cbc);
+    /* char *received_msg = cbc_rcv(cbc); */
+    char *received_msg = "Hello";
     if (received_msg) {
       printf("Worker %lu received: \"%s\"\n", cbc->pid, received_msg);
-      free(received_msg);
+      /* free(received_msg); */
     }
 
     // Broadcast a message periodically
@@ -56,7 +57,8 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
     if (++counter % 5 == 0) {
       char message[64];
       snprintf(message, sizeof(message), "Hello from worker %lu!", cbc->pid);
-      cbc_send(cbc, message, strlen(message) + 1); // Include null-terminator
+      /* cbc_send(cbc, message, strlen(message) + 1); // Include null-terminator
+       */
     }
 
     usleep(250000); // Sleep to simulate processing

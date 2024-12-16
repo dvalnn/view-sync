@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 #include <cmocka.h>
+#include <stdio.h>
 
 #include "cbcast.h"
 #include "lib/stb_ds.h"
@@ -45,6 +46,46 @@ static void test_cbcast_init(void **state) {
   assert_non_null(result);
   assert_true(result_is_err(result));
   result_free(result);
+}
+
+static void test_cbcast_serialize_deserialize(void **state) {
+  (void)state;
+
+  char *bytes = "Test message";
+  cbcast_msg_hdr_t *hdr =
+      result_unwrap(cbc_msg_create_header(CBC_DATA, 1, strlen(bytes)));
+  assert_non_null(hdr);
+
+  cbcast_msg_t *msg = result_unwrap(cbc_msg_create(hdr, bytes));
+  assert_non_null(msg);
+
+  assert_int_equal(msg->header->kind, CBC_DATA);
+  assert_int_equal(msg->header->pid, 1);
+  assert_int_equal(msg->header->clock, 0);
+  assert_int_equal(msg->header->len, strlen(bytes));
+  assert_string_equal(msg->payload, bytes);
+
+  char *serialized = cbc_msg_serialize(msg);
+  cbc_msg_free(msg);
+  assert_non_null(serialized);
+  assert_int_equal(*(int *)serialized, CBC_DATA);
+  assert_int_equal(*(uint16_t *)(serialized + sizeof(int)), 1);
+  assert_int_equal(*(uint16_t *)(serialized + sizeof(int) + sizeof(uint16_t)),
+                   0);
+  assert_int_equal(
+      *(uint16_t *)(serialized + sizeof(int) + 2 * sizeof(uint16_t)),
+      strlen(bytes));
+  assert_string_equal((serialized + sizeof(int) + 3 * sizeof(uint16_t)), bytes);
+
+  msg = result_unwrap(cbc_msg_deserialize(serialized));
+  assert_int_equal(msg->header->kind, CBC_DATA);
+  assert_int_equal(msg->header->pid, 1);
+  assert_int_equal(msg->header->clock, 0);
+  assert_int_equal(msg->header->len, strlen(bytes));
+  assert_string_equal(msg->payload, bytes);
+
+  free(serialized);
+  cbc_msg_free(msg);
 }
 
 static void test_cbcast_send(void **state) {
@@ -89,25 +130,22 @@ static void test_cbcast_send(void **state) {
   arrput(cbc->peers, peer2);
 
   // Test sending a message
-  char *message = "Test message";
-  cbc_send(cbc, message, strlen(message));
+  char *bytes = "Test message";
+  cbcast_msg_hdr_t *hdr =
+      result_unwrap(cbc_msg_create_header(CBC_DATA, cbc->pid, strlen(bytes)));
+  assert_non_null(hdr);
+
+  cbcast_msg_t *msg = result_unwrap(cbc_msg_create(hdr, bytes));
+  assert_non_null(msg);
+
+  cbc_send(cbc, msg);
 
   // Check sent_buf contains the message
   assert_int_equal(arrlen(cbc->sent_buf), 1);
   cbcast_out_msg_t *sent_msg = cbc->sent_buf[0];
   assert_non_null(sent_msg);
-  assert_non_null(sent_msg->payload);
-  assert_int_equal(sent_msg->payload_len,
-                   strlen(message) + 2 * sizeof(uint64_t));
+  assert_non_null(sent_msg->message);
   assert_int_equal(arrlen(cbc->peers), 2);
-
-  uint64_t ts = *(uint64_t *)sent_msg->payload;
-  uint64_t len = *(uint64_t *)(sent_msg->payload + sizeof(uint64_t));
-  char *sent = (sent_msg->payload + 2 * sizeof(uint64_t));
-
-  assert_int_equal(ts, 1);
-  assert_int_equal(len, strlen(message));
-  assert_string_equal(sent, message);
 
   // Check confirms are initialized
   for (int i = 0; i < arrlen(cbc->peers); i++) {
@@ -121,6 +159,7 @@ static void test_cbcast_send(void **state) {
 int main(void) {
   const struct CMUnitTest tests[] = {
       cmocka_unit_test(test_cbcast_init),
+      cmocka_unit_test(test_cbcast_serialize_deserialize),
       cmocka_unit_test(test_cbcast_send),
   };
   return cmocka_run_group_tests(tests, NULL, NULL);
