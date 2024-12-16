@@ -18,7 +18,7 @@ set(SRC_FILES
     src/vector_clock.c
     src/cbcast/common.c
     src/cbcast/message.c
-    # src/cbcast/receive.c
+    src/cbcast/receive.c
     src/cbcast/send.c
 
     # Third party
@@ -31,7 +31,7 @@ set(TEST_FILES
     test/test_view.c
     test/test_vector_clock.c
     test/test_cbcast.c
-    # test/test_cbcast_receive.c
+    test/test_cbcast_receive.c
 )
 
 # ----- Project compilation ----- # 

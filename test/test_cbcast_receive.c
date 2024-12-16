@@ -160,14 +160,18 @@ static void test_cbcast_rcv_deliverable(void **state) {
   cbcast_t *cbc = test_state->cbc;
   int sender_socket = test_state->sender_socket;
 
-  uint64_t timestamp = 1;
-  char *msg = "Hello, World!";
+  char *msg = "Hello, World! 1";
   uint64_t msg_len = strlen(msg);
 
-  char message[32] = {0};
-  memcpy(message, &timestamp, sizeof(uint64_t));
-  memcpy(message + sizeof(uint64_t), &msg_len, sizeof(uint64_t));
-  memcpy(message + 2 * sizeof(uint64_t), msg, msg_len);
+  cbcast_msg_hdr_t *hdr =
+      result_unwrap(cbc_msg_create_header(CBC_DATA, msg_len));
+
+  hdr->clock = 1;
+
+  cbcast_msg_t *message = result_unwrap(cbc_msg_create(hdr, msg));
+  size_t ser_size = 0;
+  char *msg_bytes = cbc_msg_serialize(message, &ser_size);
+  assert_non_null(msg_bytes);
 
   // Send a message using the pre-configured sender socket
   struct sockaddr_in recv_addr = {0};
@@ -175,16 +179,16 @@ static void test_cbcast_rcv_deliverable(void **state) {
   recv_addr.sin_port = htons(12345); // Receiver's port
   recv_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-  assert_int_equal(sendto(sender_socket, message, sizeof(message), 0,
+  assert_int_equal(sendto(sender_socket, msg_bytes, ser_size, 0,
                           (struct sockaddr *)&recv_addr, sizeof(recv_addr)),
-                   sizeof(message));
+                   ser_size);
 
   // Call cbc_rcv
   char *delivered_message = cbc_rcv(cbc);
 
   // Validate results
   assert_non_null(delivered_message);
-  assert_string_equal(delivered_message, "Hello, World!");
+  assert_string_equal(delivered_message, "Hello, World! 1");
 
   // Cleanup
   free(delivered_message);
@@ -195,14 +199,17 @@ static void test_cbcast_rcv_held(void **state) {
   cbcast_t *cbc = test_state->cbc;
   int sender_socket = test_state->sender_socket;
 
-  uint64_t timestamp = 3;
   char *msg = "Hello, World! 3";
   uint64_t msg_len = strlen(msg);
 
-  char message[32] = {0};
-  memcpy(message, &timestamp, sizeof(uint64_t));
-  memcpy(message + sizeof(uint64_t), &msg_len, sizeof(uint64_t));
-  memcpy(message + 2 * sizeof(uint64_t), msg, msg_len);
+  cbcast_msg_hdr_t *hdr =
+      result_unwrap(cbc_msg_create_header(CBC_DATA, msg_len));
+  hdr->clock = 3;
+
+  cbcast_msg_t *message = result_unwrap(cbc_msg_create(hdr, msg));
+  size_t ser_size = 0;
+  char *msg_bytes = cbc_msg_serialize(message, &ser_size);
+  assert_non_null(msg_bytes);
 
   // Send a message using the pre-configured sender socket
   struct sockaddr_in recv_addr = {0};
@@ -210,20 +217,16 @@ static void test_cbcast_rcv_held(void **state) {
   recv_addr.sin_port = htons(12345); // Receiver's port
   recv_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-  assert_int_equal(sendto(sender_socket, message, sizeof(message), 0,
+  assert_int_equal(sendto(sender_socket, msg_bytes, ser_size, 0,
                           (struct sockaddr *)&recv_addr, sizeof(recv_addr)),
-                   sizeof(message));
-
+                   ser_size);
   // Call cbc_rcv
   char *delivered_message = cbc_rcv(cbc);
-
-  // Validate results
   assert_null(delivered_message);
   assert_int_equal(arrlen(cbc->held_buf), 1);
   assert_non_null(cbc->held_buf[0]);
-  assert_int_equal(cbc->held_buf[0]->pid, 1);
-  assert_int_equal(cbc->held_buf[0]->timestamp, timestamp);
-  assert_string_equal(cbc->held_buf[0]->payload, msg);
+  assert_int_equal(cbc->held_buf[0]->message->header->clock, 3);
+  assert_string_equal(cbc->held_buf[0]->message->payload, msg);
 }
 
 static void test_cbcast_rcv_release_from_held(void **state) {
@@ -231,14 +234,17 @@ static void test_cbcast_rcv_release_from_held(void **state) {
   cbcast_t *cbc = test_state->cbc;
   int sender_socket = test_state->sender_socket;
 
-  uint64_t timestamp = 2;
-  char *msg = "Before Hello, World! 3";
+  char *msg = "Hello, World! 2";
   uint64_t msg_len = strlen(msg);
 
-  char message[msg_len + 2 * sizeof(uint64_t)];
-  memcpy(message, &timestamp, sizeof(uint64_t));
-  memcpy(message + sizeof(uint64_t), &msg_len, sizeof(uint64_t));
-  memcpy(message + 2 * sizeof(uint64_t), msg, msg_len);
+  cbcast_msg_hdr_t *hdr =
+      result_unwrap(cbc_msg_create_header(CBC_DATA, msg_len));
+  hdr->clock = 2;
+
+  cbcast_msg_t *message = result_unwrap(cbc_msg_create(hdr, msg));
+  size_t ser_size = 0;
+  char *msg_bytes = cbc_msg_serialize(message, &ser_size);
+  assert_non_null(msg_bytes);
 
   // Send a message using the pre-configured sender socket
   struct sockaddr_in recv_addr = {0};
@@ -246,22 +252,22 @@ static void test_cbcast_rcv_release_from_held(void **state) {
   recv_addr.sin_port = htons(12345); // Receiver's port
   recv_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-  assert_int_equal(sendto(sender_socket, message, sizeof(message), 0,
+  assert_int_equal(sendto(sender_socket, msg_bytes, ser_size, 0,
                           (struct sockaddr *)&recv_addr, sizeof(recv_addr)),
-                   sizeof(message));
-
+                   ser_size);
   // Call cbc_rcv
   char *delivered_message = cbc_rcv(cbc);
   assert_non_null(delivered_message);
   assert_string_equal(delivered_message, msg);
   assert_int_equal(arrlen(cbc->delivery_queue), 1);
   assert_non_null(cbc->delivery_queue[0]);
-  assert_string_equal(cbc->delivery_queue[0], "Hello, World! 3");
+  assert_string_equal(cbc->delivery_queue[0], "Hello, World! 2");
 
   delivered_message = cbc_rcv(cbc);
   assert_non_null(delivered_message);
-  assert_string_equal(delivered_message, "Hello, World! 3");
+  assert_string_equal(delivered_message, msg);
   assert_int_equal(arrlen(cbc->delivery_queue), 0);
+  assert_string_equal(delivered_message, "Hello, World! 3");
 }
 
 int main(void) {

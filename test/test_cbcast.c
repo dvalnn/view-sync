@@ -53,33 +53,31 @@ static void test_cbcast_serialize_deserialize(void **state) {
 
   char *bytes = "Test message";
   cbcast_msg_hdr_t *hdr =
-      result_unwrap(cbc_msg_create_header(CBC_DATA, 1, strlen(bytes)));
+      result_unwrap(cbc_msg_create_header(CBC_DATA, strlen(bytes)));
   assert_non_null(hdr);
 
   cbcast_msg_t *msg = result_unwrap(cbc_msg_create(hdr, bytes));
   assert_non_null(msg);
 
   assert_int_equal(msg->header->kind, CBC_DATA);
-  assert_int_equal(msg->header->pid, 1);
   assert_int_equal(msg->header->clock, 0);
   assert_int_equal(msg->header->len, strlen(bytes));
   assert_string_equal(msg->payload, bytes);
 
-  char *serialized = cbc_msg_serialize(msg);
+  size_t ser_size = 0;
+  char *serialized = cbc_msg_serialize(msg, &ser_size);
+  assert_int_equal(ser_size, sizeof(*msg->header) + msg->header->len + 1);
   cbc_msg_free(msg);
   assert_non_null(serialized);
   assert_int_equal(*(int *)serialized, CBC_DATA);
-  assert_int_equal(*(uint16_t *)(serialized + sizeof(int)), 1);
-  assert_int_equal(*(uint16_t *)(serialized + sizeof(int) + sizeof(uint16_t)),
-                   0);
+  assert_int_equal(*(uint16_t *)(serialized + sizeof(int)), 0);
   assert_int_equal(
-      *(uint16_t *)(serialized + sizeof(int) + 2 * sizeof(uint16_t)),
+      *(uint16_t *)(serialized + sizeof(int) +  sizeof(uint16_t)),
       strlen(bytes));
-  assert_string_equal((serialized + sizeof(int) + 3 * sizeof(uint16_t)), bytes);
+  assert_string_equal((serialized + sizeof(int) + 2 * sizeof(uint16_t)), bytes);
 
   msg = result_unwrap(cbc_msg_deserialize(serialized));
   assert_int_equal(msg->header->kind, CBC_DATA);
-  assert_int_equal(msg->header->pid, 1);
   assert_int_equal(msg->header->clock, 0);
   assert_int_equal(msg->header->len, strlen(bytes));
   assert_string_equal(msg->payload, bytes);
@@ -132,7 +130,7 @@ static void test_cbcast_send(void **state) {
   // Test sending a message
   char *bytes = "Test message";
   cbcast_msg_hdr_t *hdr =
-      result_unwrap(cbc_msg_create_header(CBC_DATA, cbc->pid, strlen(bytes)));
+      result_unwrap(cbc_msg_create_header(CBC_DATA, strlen(bytes)));
   assert_non_null(hdr);
 
   cbcast_msg_t *msg = result_unwrap(cbc_msg_create(hdr, bytes));
@@ -142,7 +140,7 @@ static void test_cbcast_send(void **state) {
 
   // Check sent_buf contains the message
   assert_int_equal(arrlen(cbc->sent_buf), 1);
-  cbcast_out_msg_t *sent_msg = cbc->sent_buf[0];
+  cbcast_sent_msg_t *sent_msg = cbc->sent_buf[0];
   assert_non_null(sent_msg);
   assert_non_null(sent_msg->message);
   assert_int_equal(arrlen(cbc->peers), 2);

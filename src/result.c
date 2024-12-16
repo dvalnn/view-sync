@@ -18,10 +18,11 @@ Result *result_new_err(const char *error) {
   r->err = error;
   return r;
 }
-
-void *result_unwrap(Result *r) {
+void *_result_unwrap(Result *r, const int line, const char *func,
+                     const char *file) {
   if (result_is_err(r)) {
-    fprintf(stderr, "[UNWRAP] Error: %s\n", r->err);
+    fprintf(stderr, "[UNWRAP] Error in %s %s line %d: %s\n", file, func, line,
+            r->err);
     exit(EXIT_FAILURE);
   }
   void *value = r->ok;

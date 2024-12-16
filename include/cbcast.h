@@ -25,7 +25,6 @@ typedef enum CBcastMessageType cbcast_msg_kind_t;
 
 struct __attribute__((packed)) CBcastMessageHeader {
   cbcast_msg_kind_t kind;
-  uint16_t pid;
   uint16_t clock;
   uint16_t len;
 };
@@ -37,12 +36,17 @@ struct CBcastMessage {
 };
 typedef struct CBcastMessage cbcast_msg_t;
 
-// TODO: Melhor nome para isto
-struct CBcastOutMessage {
+struct CBcastHeldMessage {
+  cbcast_msg_t *message;
+  uint16_t sender_pid;
+};
+typedef struct CBcastHeldMessage cbcast_held_msg_t;
+
+struct CBcastSentMessage {
   cbcast_msg_t *message;
   char *confirms;
 };
-typedef struct CBcastOutMessage cbcast_out_msg_t;
+typedef struct CBcastSentMessage cbcast_sent_msg_t;
 
 struct CBcast {
   int socket_fd;
@@ -56,8 +60,8 @@ struct CBcast {
   } **peers;
 
   char **delivery_queue;
-  cbcast_msg_t **held_buf;
-  cbcast_out_msg_t **sent_buf;
+  cbcast_held_msg_t **held_buf;
+  cbcast_sent_msg_t **sent_buf;
 };
 typedef struct CBcast cbcast_t;
 typedef struct CBCPeer cbcast_peer_t;
@@ -69,13 +73,12 @@ void cbc_free(cbcast_t *cbc);
 Result *cbc_add_peer(cbcast_t *cbc, const uint64_t pid, const char *ipv4,
                      const uint16_t port);
 // message.c
-Result *cbc_msg_create_header(cbcast_msg_kind_t kind, uint16_t pid,
-                              uint16_t len);
+Result *cbc_msg_create_header(cbcast_msg_kind_t kind, uint16_t len);
 
 Result *cbc_msg_create(cbcast_msg_hdr_t *header, char *payload);
 void cbc_msg_free(cbcast_msg_t *msg);
 
-char *cbc_msg_serialize(const cbcast_msg_t *msg);
+char *cbc_msg_serialize(const cbcast_msg_t *msg, size_t *out_size);
 Result *cbc_msg_deserialize(const char *bytes);
 
 // receive.c

@@ -65,7 +65,7 @@ void cbc_free(cbcast_t *cbc) {
 
   // Free held buffer
   for (int i = 0; i < arrlen(cbc->held_buf); i++) {
-    free(cbc->held_buf[i]->payload); // Free payload string
+    cbc_msg_free(cbc->held_buf[i]->message); // Free payload string
     free(cbc->held_buf[i]);          // Free the message struct
   }
   arrfree(cbc->held_buf);

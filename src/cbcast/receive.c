@@ -8,14 +8,11 @@ static int vc_check_causality(vector_clock_t *vclock, uint64_t pid,
                               uint64_t timestamp);
 static char *receive_raw_message(cbcast_t *cbc, struct sockaddr *sender_addr,
                                  socklen_t *addr_len, size_t *recv_len);
-static bool parse_message(const char *buffer, size_t recv_len,
-                          uint64_t *timestamp, uint64_t *msg_len,
-                          char **message);
 static cbcast_peer_t *find_sender(cbcast_t *cbc,
                                   struct sockaddr_in *sender_addr);
-static void hold_message(cbcast_t *cbc, cbcast_peer_t *sender,
-                         uint64_t timestamp, const char *message);
 static void process_held_messages(cbcast_t *cbc);
+
+static void hold_message(cbcast_t *cbc, cbcast_msg_t *msg, uint16_t sender_pid);
 
 // Main Function
 char *cbc_rcv(cbcast_t *cbc) {
@@ -33,19 +30,19 @@ char *cbc_rcv(cbcast_t *cbc) {
     return NULL; // No data or error in receiving
   }
 
-  // Step 2: Parse the message
-  uint64_t timestamp = 0, msg_len = 0;
-  char *message = NULL;
-  if (!parse_message(buffer, recv_len, &timestamp, &msg_len, &message)) {
-    free(buffer);
-    return NULL; // Invalid or incomplete message
+  Result *serialize_res = cbc_msg_deserialize(buffer);
+  free(buffer);
+  if (result_is_err(serialize_res)) {
+    result_free(serialize_res);
+    goto exit;
   }
+
+  cbcast_msg_t *received = result_unwrap(serialize_res);
 
   // Step 3: Identify the sender
   struct sockaddr_in sender_ipv4 = *(struct sockaddr_in *)&sender_addr;
   cbcast_peer_t *sender = find_sender(cbc, &sender_ipv4);
   if (!sender) {
-
     char ipv4[INET_ADDRSTRLEN];
     int port = ntohs(sender_ipv4.sin_port);
     inet_ntop(AF_INET, &sender_ipv4.sin_addr.s_addr, ipv4, INET_ADDRSTRLEN);
@@ -54,28 +51,36 @@ char *cbc_rcv(cbcast_t *cbc) {
         stderr,
         "[cbc_rcv] Cbc pid %lu received message from unknown sender %s:%d\n",
         cbc->pid, ipv4, port);
-    free(buffer);
-    return NULL;
+    goto exit;
   }
 
   // Step 4: Handle the message
-  int causal_result = vc_check_causality(cbc->vclock, sender->pid, timestamp);
+  int causal_result =
+      vc_check_causality(cbc->vclock, sender->pid, received->header->clock);
+
   if (causal_result == 0) {
-    printf("cbc pid %lu received message %lu from peer %lu\n", cbc->pid,
-           timestamp, sender->pid);
-    arrput(cbc->delivery_queue, strdup(message)); // Copy to delivery queue
-    vc_inc(cbc->vclock, sender->pid);             // Update vector clock
+    printf("cbc pid %lu received message %hu from peer %lu\n", cbc->pid,
+           received->header->clock, sender->pid);
+    arrput(cbc->delivery_queue,
+           strdup(received->payload)); // Copy to delivery queue
+    vc_inc(cbc->vclock, sender->pid);  // Update vector clock
+    cbc_msg_free(received);
 
     process_held_messages(cbc);
-  } else
-    hold_message(cbc, sender, timestamp, message);
+  } else {
+    // Hold received message
+    hold_message(cbc, received, sender->pid);
+  }
 
-  free(buffer);
-
+exit:
   // Step 6: Return a message from the delivery queue if available
+  printf("cbc pid %lu delivery_queue len is %td\n", cbc->pid,
+         arrlen(cbc->delivery_queue));
   if (arrlen(cbc->delivery_queue) > 0) {
     char *delivered_msg = cbc->delivery_queue[0]; // Get the first message
     arrdel(cbc->delivery_queue, 0);               // Remove from delivery queue
+
+    printf("cbc pid %lu delivered message: len--\n", cbc->pid);
     return delivered_msg;
   }
 
@@ -114,27 +119,12 @@ static char *receive_raw_message(cbcast_t *cbc, struct sockaddr *sender_addr,
     return NULL; // No data or error in receiving
   }
 
+  if (*recv_len < sizeof(cbcast_msg_hdr_t)) {
+    fprintf(stderr, "[receive_raw_message] msg too short\n");
+    return NULL; // No data or error in receiving
+  }
+
   return buffer;
-}
-
-static bool parse_message(const char *buffer, size_t recv_len,
-                          uint64_t *timestamp, uint64_t *msg_len,
-                          char **message) {
-  if (recv_len < 2 * sizeof(uint64_t)) {
-    fprintf(stderr, "[parse_message] Received message is too short\n");
-    return false;
-  }
-
-  *timestamp = *(uint64_t *)buffer;
-  *msg_len = *(uint64_t *)(buffer + sizeof(uint64_t));
-  *message = (char *)(buffer + 2 * sizeof(uint64_t));
-
-  if (recv_len < 2 * sizeof(uint64_t) + *msg_len) {
-    fprintf(stderr, "[parse_message] Message length mismatch\n");
-    return false;
-  }
-
-  return true;
 }
 
 static cbcast_peer_t *find_sender(cbcast_t *cbc,
@@ -149,33 +139,27 @@ static cbcast_peer_t *find_sender(cbcast_t *cbc,
   return NULL; // Unknown sender
 }
 
-static void hold_message(cbcast_t *cbc, cbcast_peer_t *sender,
-                         uint64_t timestamp, const char *message) {
-  cbcast_in_msg_t *held_msg = malloc(sizeof(cbcast_in_msg_t));
-  if (!held_msg) {
-    fprintf(stderr, "[hold_message] Failed to allocate held message\n");
-    return;
-  }
-
-  held_msg->pid = sender->pid;
-  held_msg->timestamp = timestamp;
-  held_msg->payload = strdup(message); // Copy payload
-
-  arrput(cbc->held_buf, held_msg); // Add to held buffer
+static void hold_message(cbcast_t *cbc, cbcast_msg_t *msg,
+                         uint16_t sender_pid) {
+  cbcast_held_msg_t *held = calloc(1, sizeof(cbcast_held_msg_t));
+  // TODO: if ...
+  held->message = msg;
+  held->sender_pid = sender_pid;
+  arrput(cbc->held_buf, held);
 }
 
 static void process_held_messages(cbcast_t *cbc) {
   for (size_t i = 0; i < (size_t)arrlen(cbc->held_buf);) {
-    cbcast_in_msg_t *held_msg = cbc->held_buf[i];
-    if (vc_check_causality(cbc->vclock, held_msg->pid, held_msg->timestamp) ==
-        0) {
-      arrput(cbc->delivery_queue, strdup(held_msg->payload));
-      vc_inc(cbc->vclock, held_msg->pid);
+    cbcast_held_msg_t *held_msg = cbc->held_buf[i];
+    if (vc_check_causality(cbc->vclock, held_msg->sender_pid,
+                           held_msg->message->header->clock) == 0) {
+      arrput(cbc->delivery_queue, strdup(held_msg->message->payload));
+      vc_inc(cbc->vclock, held_msg->sender_pid);
 
       // Remove from held buffer
-      free(held_msg->payload);
-      free(held_msg);
       arrdel(cbc->held_buf, i);
+      cbc_msg_free(held_msg->message);
+      free(held_msg);
     } else {
       i++; // Only increment if not deleting an element
     }

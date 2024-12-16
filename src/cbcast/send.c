@@ -35,9 +35,10 @@ static Result *cbc_send_to_peer(int socket_fd, cbcast_peer_t *peer,
   }
 
   int flags = 0;
-  const char *payload = cbc_msg_serialize(msg);
+  size_t payload_size = 0;
+  const char *payload = cbc_msg_serialize(msg, &payload_size);
   ssize_t sent_bytes =
-      sendto(socket_fd, payload, strlen(payload), flags,
+      sendto(socket_fd, payload, payload_size, flags,
              (struct sockaddr *)peer->addr, sizeof(struct sockaddr_in));
 
   if (sent_bytes < 0) {
@@ -50,7 +51,7 @@ static Result *cbc_send_to_peer(int socket_fd, cbcast_peer_t *peer,
 // Stores the sent message in sent_msgs and returns a Result
 static Result *cbc_store_sent_message(cbcast_t *cbc, cbcast_msg_t *msg) {
 
-  cbcast_out_msg_t *out = malloc(sizeof(cbcast_out_msg_t));
+  cbcast_sent_msg_t *out = malloc(sizeof(cbcast_sent_msg_t));
   if (!out) {
     return result_new_err("[cbc_store_sent_message] malloc out");
   }

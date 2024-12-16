@@ -49,7 +49,9 @@ Result *result_new_err(const char *error);
  * @return A pointer to the value stored in the `Result`'s `ok` field.
  * @note The function terminates the program on error.
  */
-void *result_unwrap(Result *r);
+void *_result_unwrap(Result *r, const int line, const char *func,
+                     const char *file);
+#define result_unwrap(r) _result_unwrap(r, __LINE__, __FUNCTION__, __FILE__)
 
 /**
  * @brief Extracts the value from a successful `Result` or exits with a custom
