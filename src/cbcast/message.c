@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+// ************** Function Declaration ***************
+//
 static char *cbc_msg_serialize_heartbeat(const cbcast_msg_t *msg,
                                          size_t *out_size);
 
@@ -18,6 +20,8 @@ Result *cbc_msg_create_header(cbcast_msg_kind_t kind, uint16_t len) {
   return result_new_ok(hdr);
 }
 
+// ************** Public Functions ***************
+//
 Result *cbc_msg_create(cbcast_msg_hdr_t *header, char *payload) {
   if (!header || !payload) {
     return result_new_err("[cbc_create_message] Invalid arguments");
@@ -99,11 +103,6 @@ Result *cbc_msg_deserialize(const char *bytes) {
   memcpy(msg->header, bytes, sizeof(cbcast_msg_hdr_t));
 
   if (msg->header->kind == CBC_HEARTBEAT) {
-    // Debug output
-    printf(
-        "[cbc_msg_deserialize] Deserialized heartbeat msg message: clock=%d\n",
-        msg->header->clock);
-
     return result_new_ok(msg); // hearbeat has no payload
   }
 
@@ -134,6 +133,8 @@ Result *cbc_msg_deserialize(const char *bytes) {
   return result_new_ok(msg);
 }
 
+// ************** Private Functions ***************
+//
 static char *cbc_msg_serialize_heartbeat(const cbcast_msg_t *msg,
                                          size_t *out_size) {
   size_t total_size = sizeof(cbcast_msg_hdr_t);

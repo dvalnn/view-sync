@@ -57,21 +57,20 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc) {
   if (!buffer) // No data or error
     return deliver_message(cbc);
 
-  // Step 2: Deserialize the received message
-  Result *serialize_res = cbc_msg_deserialize(buffer);
-  free(buffer);
-  if (result_is_err(serialize_res)) {
-    result_free(serialize_res);
-    return deliver_message(cbc);
-  }
-
-  // Step 3: Identify the sender
+  // Step 1: Identify the sender
   struct sockaddr_in sender_ipv4 = *(struct sockaddr_in *)&sender_addr;
   cbcast_peer_t *sender = find_sender(cbc, &sender_ipv4);
   if (!sender) {
     return deliver_message(cbc);
   }
 
+  // Step 3: Deserialize the received message
+  Result *serialize_res = cbc_msg_deserialize(buffer);
+  free(buffer);
+  if (result_is_err(serialize_res)) {
+    result_free(serialize_res);
+    return deliver_message(cbc);
+  }
   cbcast_received_msg_t *received = result_unwrap(
       create_received_message(result_unwrap(serialize_res), sender->pid));
 
@@ -86,10 +85,11 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc) {
 
   case CBC_DATA:
     return process_data_msg(cbc, received);
-  }
 
-  RESULT_UNREACHABLE;
-  return NULL;
+  default:
+    RESULT_UNREACHABLE;
+    return NULL;
+  }
 }
 
 // ************** Private Functions ***************
