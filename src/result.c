@@ -21,8 +21,8 @@ Result *result_new_err(const char *error) {
 void *_result_unwrap(Result *r, const int line, const char *func,
                      const char *file) {
   if (result_is_err(r)) {
-    fprintf(stderr, "[UNWRAP] Error in %s:%s() line %d: %s\n", file, func, line,
-            r->err);
+    fprintf(stderr, "[UNWRAP] Exiting at %s:%d in %s():: %s\n", file, line,
+            func, r->err);
     exit(EXIT_FAILURE);
   }
   void *value = r->ok;
@@ -30,9 +30,11 @@ void *_result_unwrap(Result *r, const int line, const char *func,
   return value;
 }
 
-void *result_expect(Result *r, const char *msg) {
+void *_result_expect(Result *r, const char *msg, const int line,
+                     const char *func, const char *file) {
   if (result_is_err(r)) {
-    fprintf(stderr, "[EXPECT] %s: %s\n", msg, r->err);
+    fprintf(stderr, "[EXPECT] Exiting at %s:%d in %s():: %s: %s\n", file, line,
+            func, r->err, msg);
     exit(EXIT_FAILURE);
   }
   void *value = r->ok;

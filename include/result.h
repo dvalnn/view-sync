@@ -67,8 +67,10 @@ void *_result_unwrap(Result *r, const int line, const char *func,
  * @return A pointer to the value stored in the `Result`'s `ok` field.
  * @note The function terminates the program on error.
  */
-void *result_expect(Result *r, const char *msg);
-
+void *_result_expect(Result *r, const char *msg, const int line,
+                     const char *func, const char *file);
+#define result_expect(r, msg)                                                  \
+  _result_expect(r, msg, __LINE__, __FUNCTION__, __FILE__)
 /**
  * @brief Frees the memory associated with a `Result` object.
  *
