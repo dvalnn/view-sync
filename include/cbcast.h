@@ -20,6 +20,7 @@ enum CBcastMessageType {
   CBC_HEARTBEAT = 1,
   CBC_RETRANSMIT,
   CBC_DATA,
+  CBC_ACK,
 };
 typedef enum CBcastMessageType cbcast_msg_kind_t;
 
@@ -39,6 +40,7 @@ typedef struct CBcastMessage cbcast_msg_t;
 struct CBcastReceivedMessage {
   cbcast_msg_t *message;
   uint16_t sender_pid;
+  uint16_t sender_idx;
 };
 typedef struct CBcastReceivedMessage cbcast_received_msg_t;
 
@@ -56,6 +58,7 @@ struct CBcast {
 
   struct CBCPeer {
     uint64_t pid;
+    size_t pos;
     struct sockaddr_in *addr;
   } **peers;
 
@@ -87,6 +90,8 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc);
 void cbc_received_message_free(cbcast_received_msg_t *msg);
 
 // send.c
+// TODO: Fix normalize return types
 void cbc_send(cbcast_t *cbc, cbcast_msg_t *msg);
-
+Result *cbc_send_to_peer(cbcast_t *cbc, const char *payload, size_t payload_len,
+                         int peer_idx, int flags);
 #endif

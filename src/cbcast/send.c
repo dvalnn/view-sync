@@ -5,8 +5,6 @@
 
 // ************** Function Declaration ***************
 //
-static Result *cbc_send_to_peer(int socket_fd, cbcast_peer_t *peer,
-                                cbcast_msg_t *msg, int flags);
 
 static Result *cbc_store_sent_message(cbcast_t *cbc, cbcast_msg_t *msg);
 
@@ -28,30 +26,31 @@ void cbc_send(cbcast_t *cbc, cbcast_msg_t *msg) {
   case CBC_DATA:
     msg->header->clock = *(uint64_t *)result_expect(
         vc_inc(cbc->vclock, cbc->pid), "[cbc_send] vclock increment failed");
-    printf("[cbc_send] Broadcasting message with clock %d\n",
-           msg->header->clock);
+    printf("[cbc_send] Worker %lu broadcasting message with clock %d\n",
+           cbc->pid, msg->header->clock);
     cbc_broadcast(cbc, msg, 0);
     result_expect(cbc_store_sent_message(cbc, msg), "[cbc_send] store failed");
     break;
 
   case CBC_RETRANSMIT:
     // TODO: Implement retransmit
-    RESULT_UNIMPLEMENTED;
+    return (void)RESULT_UNIMPLEMENTED;
+
+    // ACKs are directly sent by the receive function
+  case CBC_ACK:
+    return (void)RESULT_UNREACHABLE;
   }
 }
 
-// ************** Private Functions ***************
-//
-static Result *cbc_send_to_peer(int socket_fd, cbcast_peer_t *peer,
-                                cbcast_msg_t *msg, int flags) {
+Result *cbc_send_to_peer(cbcast_t *cbc, const char *payload, size_t payload_len,
+                         int peer_idx, int flags) {
+  cbcast_peer_t *peer = cbc->peers[peer_idx];
   if (!peer || !peer->addr) {
     return result_new_err("[cbc_send_to_peer] Invalid peer or address");
   }
 
-  size_t payload_size = 0;
-  const char *payload = cbc_msg_serialize(msg, &payload_size);
   ssize_t sent_bytes =
-      sendto(socket_fd, payload, payload_size, flags,
+      sendto(cbc->socket_fd, payload, payload_len, flags,
              (struct sockaddr *)peer->addr, sizeof(struct sockaddr_in));
 
   if (sent_bytes < 0) {
@@ -61,12 +60,19 @@ static Result *cbc_send_to_peer(int socket_fd, cbcast_peer_t *peer,
   return result_new_ok(NULL);
 }
 
+// ************** Private Functions ***************
+//
+
 static void cbc_broadcast(cbcast_t *cbc, cbcast_msg_t *msg, int flags) {
+  size_t msg_len = 0;
+  char *msg_bytes = cbc_msg_serialize(msg, &msg_len);
+
   for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
-    cbcast_peer_t *peer = cbc->peers[i];
-    result_expect(cbc_send_to_peer(cbc->socket_fd, peer, msg, flags),
+    result_expect(cbc_send_to_peer(cbc, msg_bytes, msg_len, i, flags),
                   "[cbc_send_heartbeat] send failed");
   }
+
+  free(msg_bytes);
 }
 
 // Stores the sent message in sent_msgs and returns a Result

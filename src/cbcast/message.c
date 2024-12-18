@@ -8,6 +8,8 @@
 static char *cbc_msg_serialize_heartbeat(const cbcast_msg_t *msg,
                                          size_t *out_size);
 
+static char *cbc_msg_serialize_ack(const cbcast_msg_t *msg, size_t *out_size);
+
 static char *cbc_msg_serialize_data(const cbcast_msg_t *msg, size_t *out_size);
 
 Result *cbc_msg_create_header(cbcast_msg_kind_t kind, uint16_t len) {
@@ -23,8 +25,8 @@ Result *cbc_msg_create_header(cbcast_msg_kind_t kind, uint16_t len) {
 // ************** Public Functions ***************
 //
 Result *cbc_msg_create(cbcast_msg_hdr_t *header, char *payload) {
-  if (!header || !payload) {
-    return result_new_err("[cbc_create_message] Invalid arguments");
+  if (!header) {
+    return result_new_err("[cbc_create_message] Invalid header");
   }
 
   cbcast_msg_t *message = calloc(1, sizeof(cbcast_msg_t));
@@ -33,9 +35,13 @@ Result *cbc_msg_create(cbcast_msg_hdr_t *header, char *payload) {
   }
 
   message->header = header;
-  if (header->kind == CBC_HEARTBEAT) {
+  if (header->kind == CBC_HEARTBEAT || header->kind == CBC_ACK) {
     message->header->len = 0;
     return result_new_ok(message);
+  }
+
+  if (!payload) {
+    return result_new_err("[cbc_create_message] Null payload");
   }
 
   message->payload = calloc(strlen(payload) + 1, sizeof(char));
@@ -72,10 +78,11 @@ char *cbc_msg_serialize(const cbcast_msg_t *msg, size_t *out_size) {
   case CBC_HEARTBEAT:
     return cbc_msg_serialize_heartbeat(msg, out_size);
   case CBC_RETRANSMIT:
-    RESULT_UNIMPLEMENTED;
-    return NULL;
+    return RESULT_UNIMPLEMENTED;
   case CBC_DATA:
     return cbc_msg_serialize_data(msg, out_size);
+  case CBC_ACK:
+    return cbc_msg_serialize_ack(msg, out_size);
   }
 
   return RESULT_UNREACHABLE;
@@ -102,8 +109,8 @@ Result *cbc_msg_deserialize(const char *bytes) {
   }
   memcpy(msg->header, bytes, sizeof(cbcast_msg_hdr_t));
 
-  if (msg->header->kind == CBC_HEARTBEAT) {
-    return result_new_ok(msg); // hearbeat has no payload
+  if (msg->header->kind == CBC_HEARTBEAT || msg->header->kind == CBC_ACK) {
+    return result_new_ok(msg); // no payload
   }
 
   // Validate header length to prevent overflows
@@ -126,9 +133,10 @@ Result *cbc_msg_deserialize(const char *bytes) {
   msg->payload[msg->header->len] = '\0'; // Ensure null termination
 
   // Debug output
-  printf("[cbc_msg_deserialize] Deserialized message: kind=%d, "
-         "clock=%d, len=%d, payload=\"%s\"\n",
-         msg->header->kind, msg->header->clock, msg->header->len, msg->payload);
+  /* printf("[cbc_msg_deserialize] Deserialized message: kind=%d, " */
+  /*        "clock=%d, len=%d, payload=\"%s\"\n", */
+  /*        msg->header->kind, msg->header->clock, msg->header->len,
+   * msg->payload); */
 
   return result_new_ok(msg);
 }
@@ -141,6 +149,19 @@ static char *cbc_msg_serialize_heartbeat(const cbcast_msg_t *msg,
   char *serialized = calloc(total_size, sizeof(char));
   if (!serialized) {
     fprintf(stderr, "[cbc_msg_serialize_heartbeat] Memory allocation failed\n");
+    return NULL;
+  }
+
+  memcpy(serialized, msg->header, sizeof(cbcast_msg_hdr_t));
+  *out_size = total_size;
+  return serialized;
+}
+
+static char *cbc_msg_serialize_ack(const cbcast_msg_t *msg, size_t *out_size) {
+  size_t total_size = sizeof(cbcast_msg_hdr_t);
+  char *serialized = calloc(total_size, sizeof(char));
+  if (!serialized) {
+    fprintf(stderr, "[cbc_msg_serialize_ack] Memory allocation failed\n");
     return NULL;
   }
 
@@ -170,10 +191,10 @@ static char *cbc_msg_serialize_data(const cbcast_msg_t *msg, size_t *out_size) {
          msg->header->len + 1);
 
   // Debug output
-  printf("[cbc_msg_serialize_data] Serialized message: total_size=%zu, "
-         "header_size=%zu, payload_size=%d, clock=%d\n",
-         total_size, sizeof(cbcast_msg_hdr_t), msg->header->len + 1,
-         msg->header->clock);
+  /* printf("[cbc_msg_serialize_data] Serialized message: total_size=%zu, " */
+  /*        "header_size=%zu, payload_size=%d, clock=%d\n", */
+  /*        total_size, sizeof(cbcast_msg_hdr_t), msg->header->len + 1, */
+  /*        msg->header->clock); */
 
   *out_size = total_size;
   return serialized;
