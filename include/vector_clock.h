@@ -17,6 +17,5 @@ Result *vc_init(const uint64_t size);
 void vc_free(vector_clock_t *vc);
 
 Result *vc_inc(vector_clock_t *vc, uint64_t pos);
-Result *vc_snapshot(vector_clock_t *vc);
 
 #endif

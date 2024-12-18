@@ -7,25 +7,38 @@ static Result *cbc_send_to_peer(int socket_fd, cbcast_peer_t *peer,
                                 cbcast_msg_t *msg);
 static Result *cbc_store_sent_message(cbcast_t *cbc, cbcast_msg_t *msg);
 
+static void cbc_broadcast(cbcast_t *cbc, cbcast_msg_t *msg) {
+  for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
+    cbcast_peer_t *peer = cbc->peers[i];
+    result_expect(cbc_send_to_peer(cbc->socket_fd, peer, msg),
+                  "[cbc_send_heartbeat] send failed");
+  }
+}
+
 void cbc_send(cbcast_t *cbc, cbcast_msg_t *msg) {
   if (!cbc || !msg) {
     fprintf(stderr, "[cbc_send] Invalid arguments\n");
     return;
   }
 
-  // Step 1: Update vector clock and get a snapshot
-  msg->header->clock = *(uint64_t *)result_expect(
-      vc_inc(cbc->vclock, cbc->pid), "[cbc_send] vclock increment failed");
+  switch (msg->header->kind) {
+  case CBC_HEARTBEAT:
+    cbc_broadcast(cbc, msg);
+    return;
 
-  // Step 3: Send msg to all peers
-  for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
-    cbcast_peer_t *peer = cbc->peers[i];
-    result_expect(cbc_send_to_peer(cbc->socket_fd, peer, msg),
-                  "[cbc_send] send failed");
+  case CBC_DATA:
+    msg->header->clock = *(uint64_t *)result_expect(
+        vc_inc(cbc->vclock, cbc->pid), "[cbc_send] vclock increment failed");
+    printf("[cbc_send] Broadcasting message with clock %d\n",
+           msg->header->clock);
+    cbc_broadcast(cbc, msg);
+    result_expect(cbc_store_sent_message(cbc, msg), "[cbc_send] store failed");
+    break;
+
+  case CBC_RETRANSMIT:
+    // TODO: Implement retransmit
+    RESULT_UNIMPLEMENTED;
   }
-
-  // Step 4: Store sent message
-  result_expect(cbc_store_sent_message(cbc, msg), "[cbc_send] store failed");
 }
 
 static Result *cbc_send_to_peer(int socket_fd, cbcast_peer_t *peer,

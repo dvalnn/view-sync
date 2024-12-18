@@ -68,11 +68,13 @@ char *cbc_msg_serialize(const cbcast_msg_t *msg, size_t *out_size) {
   case CBC_HEARTBEAT:
     return cbc_msg_serialize_heartbeat(msg, out_size);
   case CBC_RETRANSMIT:
+    RESULT_UNIMPLEMENTED;
+    return NULL;
   case CBC_DATA:
     return cbc_msg_serialize_data(msg, out_size);
   }
 
-  return result_unwrap(result_new_err("UNREACHABLE"));
+  return RESULT_UNREACHABLE;
 }
 
 Result *cbc_msg_deserialize(const char *bytes) {
@@ -168,8 +170,9 @@ static char *cbc_msg_serialize_data(const cbcast_msg_t *msg, size_t *out_size) {
 
   // Debug output
   printf("[cbc_msg_serialize_data] Serialized message: total_size=%zu, "
-         "header_size=%zu, payload_size=%d\n",
-         total_size, sizeof(cbcast_msg_hdr_t), msg->header->len + 1);
+         "header_size=%zu, payload_size=%d, clock=%d\n",
+         total_size, sizeof(cbcast_msg_hdr_t), msg->header->len + 1,
+         msg->header->clock);
 
   *out_size = total_size;
   return serialized;

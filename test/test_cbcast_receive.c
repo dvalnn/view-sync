@@ -184,11 +184,12 @@ static void test_cbcast_rcv_deliverable(void **state) {
                    ser_size);
 
   // Call cbc_rcv
-  char *delivered_message = cbc_rcv(cbc);
+  cbcast_received_msg_t *delivered_message = cbc_receive(cbc);
 
   // Validate results
   assert_non_null(delivered_message);
-  assert_string_equal(delivered_message, "Hello, World! 1");
+  assert_non_null(delivered_message->message);
+  assert_string_equal(delivered_message->message->payload, "Hello, World! 1");
 
   // Cleanup
   free(delivered_message);
@@ -221,7 +222,7 @@ static void test_cbcast_rcv_held(void **state) {
                           (struct sockaddr *)&recv_addr, sizeof(recv_addr)),
                    ser_size);
   // Call cbc_rcv
-  char *delivered_message = cbc_rcv(cbc);
+  cbcast_received_msg_t *delivered_message = cbc_receive(cbc);
   assert_null(delivered_message);
   assert_int_equal(arrlen(cbc->held_buf), 1);
   assert_non_null(cbc->held_buf[0]);
@@ -256,17 +257,17 @@ static void test_cbcast_rcv_release_from_held(void **state) {
                           (struct sockaddr *)&recv_addr, sizeof(recv_addr)),
                    ser_size);
   // Call cbc_rcv
-  char *delivered_message = cbc_rcv(cbc);
+  cbcast_received_msg_t *delivered_message = cbc_receive(cbc);
   assert_non_null(delivered_message);
-  assert_string_equal(delivered_message, msg);
+  assert_string_equal(delivered_message->message->payload, msg);
   assert_int_equal(arrlen(cbc->delivery_queue), 1);
   assert_non_null(cbc->delivery_queue[0]);
-  assert_string_equal(cbc->delivery_queue[0], "Hello, World! 3");
+  assert_string_equal(cbc->delivery_queue[0]->message->payload, "Hello, World! 3");
   free(delivered_message);
 
-  delivered_message = cbc_rcv(cbc);
+  delivered_message = cbc_receive(cbc);
   assert_non_null(delivered_message);
-  assert_string_equal(delivered_message, "Hello, World! 3");
+  assert_string_equal(delivered_message->message->payload, "Hello, World! 3");
   assert_int_equal(arrlen(cbc->delivery_queue), 0);
 }
 

@@ -45,10 +45,11 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
   printf("Worker %lu starting broadcast phase.\n", cbc->pid);
 
   while (running) {
-    char *received_msg = cbc_rcv(cbc);
+    cbcast_received_msg_t *received_msg = cbc_receive(cbc);
     if (received_msg) {
-      printf("Worker %lu received: \"%s\"\n", cbc->pid, received_msg);
-      free(received_msg);
+      printf("Worker %lu received: \"%s\" from peer %d\n", cbc->pid,
+             received_msg->message->payload, received_msg->sender_pid);
+      cbc_received_message_free(received_msg);
     }
 
     // Broadcast a message periodically

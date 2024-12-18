@@ -84,6 +84,7 @@ void result_free(Result *r);
 inline bool result_is_ok(Result *r) { return r->_is_ok; }
 inline bool result_is_err(Result *r) { return !r->_is_ok; }
 
-#define RESULT_UNIMPLEMENTED result_new_err("Unimplemented")
+#define RESULT_UNIMPLEMENTED result_unwrap(result_new_err("Unimplemented"))
+#define RESULT_UNREACHABLE result_unwrap(result_new_err("Unreachable"))
 
 #endif

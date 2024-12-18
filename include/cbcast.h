@@ -17,7 +17,7 @@
 #endif
 
 enum CBcastMessageType {
-  CBC_HEARTBEAT = 0,
+  CBC_HEARTBEAT = 1,
   CBC_RETRANSMIT,
   CBC_DATA,
 };
@@ -36,11 +36,11 @@ struct CBcastMessage {
 };
 typedef struct CBcastMessage cbcast_msg_t;
 
-struct CBcastHeldMessage {
+struct CBcastReceivedMessage {
   cbcast_msg_t *message;
   uint16_t sender_pid;
 };
-typedef struct CBcastHeldMessage cbcast_held_msg_t;
+typedef struct CBcastReceivedMessage cbcast_received_msg_t;
 
 struct CBcastSentMessage {
   cbcast_msg_t *message;
@@ -59,9 +59,9 @@ struct CBcast {
     struct sockaddr_in *addr;
   } **peers;
 
-  char **delivery_queue;
-  cbcast_held_msg_t **held_buf;
   cbcast_sent_msg_t **sent_buf;
+  cbcast_received_msg_t **delivery_queue;
+  cbcast_received_msg_t **held_buf;
 };
 typedef struct CBcast cbcast_t;
 typedef struct CBCPeer cbcast_peer_t;
@@ -72,6 +72,7 @@ void cbc_free(cbcast_t *cbc);
 
 Result *cbc_add_peer(cbcast_t *cbc, const uint64_t pid, const char *ipv4,
                      const uint16_t port);
+
 // message.c
 Result *cbc_msg_create_header(cbcast_msg_kind_t kind, uint16_t len);
 
@@ -82,7 +83,8 @@ char *cbc_msg_serialize(const cbcast_msg_t *msg, size_t *out_size);
 Result *cbc_msg_deserialize(const char *bytes);
 
 // receive.c
-char *cbc_rcv(cbcast_t *cbc);
+cbcast_received_msg_t *cbc_receive(cbcast_t *cbc);
+void cbc_received_message_free(cbcast_received_msg_t *msg);
 
 // send.c
 void cbc_send(cbcast_t *cbc, cbcast_msg_t *msg);
