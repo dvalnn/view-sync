@@ -17,10 +17,11 @@
 #endif
 
 enum CBcastMessageType {
-  CBC_HEARTBEAT = 1,
-  CBC_RETRANSMIT,
-  CBC_DATA,
+  CBC_DATA = 1,
   CBC_ACK,
+  CBC_RETRANSMIT_REQ,
+  CBC_RETRANSMIT,
+  CBC_HEARTBEAT,
 };
 typedef enum CBcastMessageType cbcast_msg_kind_t;
 
@@ -92,6 +93,7 @@ void cbc_received_message_free(cbcast_received_msg_t *msg);
 // send.c
 // TODO: Fix normalize return types
 void cbc_send(cbcast_t *cbc, cbcast_msg_t *msg);
-Result *cbc_send_to_peer(cbcast_t *cbc, const char *payload, size_t payload_len,
-                         int peer_idx, int flags);
+Result *cbc_send_to_peer(const cbcast_t *cbc, const char *payload,
+                         const size_t payload_len, const int peer_idx,
+                         const int flags);
 #endif

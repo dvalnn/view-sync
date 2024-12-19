@@ -42,8 +42,9 @@ void cbc_send(cbcast_t *cbc, cbcast_msg_t *msg) {
   }
 }
 
-Result *cbc_send_to_peer(cbcast_t *cbc, const char *payload, size_t payload_len,
-                         int peer_idx, int flags) {
+Result *cbc_send_to_peer(const cbcast_t *cbc, const char *payload,
+                         const size_t payload_len, const int peer_idx,
+                         const int flags) {
   cbcast_peer_t *peer = cbc->peers[peer_idx];
   if (!peer || !peer->addr) {
     return result_new_err("[cbc_send_to_peer] Invalid peer or address");

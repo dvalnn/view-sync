@@ -6,6 +6,7 @@
 #include <stdlib.h>
 
 // ************** Public Functions ***************
+//
 Result *cbc_init(uint64_t pid, uint64_t max_p, uint16_t port) {
   // Validate arguments
   if (!max_p || pid >= max_p) {

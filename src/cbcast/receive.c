@@ -27,17 +27,23 @@ static char *receive_raw_message(cbcast_t *cbc, struct sockaddr *sender_addr,
 static Result *create_received_message(cbcast_msg_t *msg, uint16_t sender_pid,
                                        uint16_t sender_idx);
 
-static cbcast_peer_t *find_sender(cbcast_t *cbc,
-                                  struct sockaddr_in *sender_addr);
+static cbcast_peer_t *find_sender(const cbcast_t *cbc,
+                                  const struct sockaddr_in *sender_ipv4);
 
-static void process_held_msgs(cbcast_t *cbc);
+static void ack_msg(const cbcast_t *cbc, const cbcast_peer_t *peer,
+                    const uint16_t ack_clock);
+
+static void verify_held_msg_causality(cbcast_t *cbc);
 
 static void process_ack(cbcast_t *cbc, cbcast_received_msg_t *rcvd);
+
+static void ask_for_retransmissions(const cbcast_t *cbc,
+                                    const cbcast_peer_t *peer);
 
 static cbcast_received_msg_t *process_data_msg(cbcast_t *cbc,
                                                cbcast_received_msg_t *rcvd);
 
-static cbcast_received_msg_t *deliver_message(cbcast_t *cbc);
+static cbcast_received_msg_t *deliver_from_queue(cbcast_t *cbc);
 
 // ************** Public Functions ***************
 //
@@ -62,13 +68,13 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc) {
   // Step 1: Receive the raw message
   char *buffer = receive_raw_message(cbc, &sender_addr, &addr_len, &recv_len);
   if (!buffer) // No data or error
-    return deliver_message(cbc);
+    return deliver_from_queue(cbc);
 
   // Step 1: Identify the sender
   struct sockaddr_in sender_ipv4 = *(struct sockaddr_in *)&sender_addr;
   cbcast_peer_t *sender = find_sender(cbc, &sender_ipv4);
   if (!sender) {
-    return deliver_message(cbc);
+    return deliver_from_queue(cbc);
   }
 
   // Step 3: Deserialize the received message
@@ -76,7 +82,7 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc) {
   free(buffer);
   if (result_is_err(serialize_res)) {
     result_free(serialize_res);
-    return deliver_message(cbc);
+    return deliver_from_queue(cbc);
   }
 
   cbcast_received_msg_t *received = result_unwrap(create_received_message(
@@ -85,22 +91,20 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc) {
   switch (received->message->header->kind) {
   case CBC_HEARTBEAT:
     arrput(cbc->delivery_queue, received);
-    return deliver_message(cbc);
+    return deliver_from_queue(cbc);
 
   case CBC_RETRANSMIT:
-    RESULT_UNIMPLEMENTED;
-    return NULL;
+    return RESULT_UNIMPLEMENTED;
 
   case CBC_DATA:
     return process_data_msg(cbc, received);
 
   case CBC_ACK:
     process_ack(cbc, received);
-    return deliver_message(cbc);
+    return deliver_from_queue(cbc);
 
   default:
-    RESULT_UNREACHABLE;
-    return NULL;
+    return RESULT_UNREACHABLE;
   }
 }
 
@@ -165,8 +169,8 @@ static char *receive_raw_message(cbcast_t *cbc, struct sockaddr *sender_addr,
 }
 
 // Find sender from the list of known peers
-static cbcast_peer_t *find_sender(cbcast_t *cbc,
-                                  struct sockaddr_in *sender_ipv4) {
+static cbcast_peer_t *find_sender(const cbcast_t *cbc,
+                                  const struct sockaddr_in *sender_ipv4) {
   for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
     if (memcmp(cbc->peers[i]->addr, sender_ipv4, sizeof(struct sockaddr_in)) ==
         0) {
@@ -183,7 +187,32 @@ static cbcast_peer_t *find_sender(cbcast_t *cbc,
   return NULL; // Unknown sender
 }
 
-static void process_held_msgs(cbcast_t *cbc) {
+static void ack_msg(const cbcast_t *cbc, const cbcast_peer_t *peer,
+                    const uint16_t ack_clock) {
+
+  // Step 1: Ack the received message
+  cbcast_msg_hdr_t *ack_hdr = result_unwrap(cbc_msg_create_header(CBC_ACK, 0));
+  cbcast_msg_t *ack_msg = result_unwrap(cbc_msg_create(ack_hdr, NULL));
+  ack_msg->header->clock = ack_clock;
+
+  size_t ack_msg_size = 0;
+  char *ack_msg_bytes = cbc_msg_serialize(ack_msg, &ack_msg_size);
+
+  char err_msg[1024];
+  sprintf(err_msg,
+          "[process_data_msg] cbc pid %lu Failed to send ACK to peer pid %lu "
+          "idx %zu for "
+          "message with clock %d.\n",
+          cbc->pid, peer->pid, peer->pos, ack_clock);
+
+  result_expect(cbc_send_to_peer(cbc, ack_msg_bytes, ack_msg_size, peer->pos,
+                                 MSG_CONFIRM),
+                err_msg);
+
+  free(ack_msg_bytes);
+}
+
+static void verify_held_msg_causality(cbcast_t *cbc) {
   for (size_t i = 0; i < (size_t)arrlen(cbc->held_buf);) {
     cbcast_received_msg_t *held_msg = cbc->held_buf[i];
     if (vc_check_causality(cbc->vclock, held_msg->sender_pid,
@@ -199,13 +228,11 @@ static void process_held_msgs(cbcast_t *cbc) {
   }
 }
 
-static cbcast_received_msg_t *deliver_message(cbcast_t *cbc) {
+static cbcast_received_msg_t *deliver_from_queue(cbcast_t *cbc) {
   // Return message in delivery queue, if any
   if (arrlen(cbc->delivery_queue) > 0) {
     cbcast_received_msg_t *delivered_msg = cbc->delivery_queue[0];
     arrdel(cbc->delivery_queue, 0); // Remove from queue
-    /* printf("[deliver_message] cbc pid: %lu delivered message with clock %d\n", */
-    /*        cbc->pid, delivered_msg->message->header->clock); */
     return delivered_msg;
   }
 
@@ -254,30 +281,20 @@ static void process_ack(cbcast_t *cbc, cbcast_received_msg_t *rcvd) {
   free(acked_msg);
 }
 
+static void ask_for_retransmissions(const cbcast_t *cbc,
+                                    const cbcast_peer_t *peer) {
+  if (!arrlen(cbc->held_buf)) {
+    return;
+  }
+
+
+}
+
 static cbcast_received_msg_t *process_data_msg(cbcast_t *cbc,
                                                cbcast_received_msg_t *rcvd) {
 
-  // Step 1: Ack the received message
-  cbcast_msg_hdr_t *ack_hdr = result_unwrap(cbc_msg_create_header(CBC_ACK, 0));
-  cbcast_msg_t *ack_msg = result_unwrap(cbc_msg_create(ack_hdr, NULL));
-  ack_msg->header->clock = rcvd->message->header->clock;
-
-  size_t ack_msg_size = 0;
-  char *ack_msg_bytes = cbc_msg_serialize(ack_msg, &ack_msg_size);
-
-  char err_msg[1024];
-  sprintf(err_msg,
-          "[process_data_msg] cbc pid %lu Failed to send ACK to peer pid %hu "
-          "idx %hu for "
-          "message with clock %d.\n",
-          cbc->pid, rcvd->sender_pid, rcvd->sender_idx,
-          rcvd->message->header->clock);
-
-  result_expect(cbc_send_to_peer(cbc, ack_msg_bytes, ack_msg_size,
-                                 rcvd->sender_idx, MSG_CONFIRM),
-                err_msg);
-
-  free(ack_msg_bytes);
+  // Step 1: Ack the message
+  ack_msg(cbc, cbc->peers[rcvd->sender_idx], rcvd->message->header->clock);
 
   // Step 2: Assert Message Causality;
   causality_t causality = vc_check_causality(cbc->vclock, rcvd->sender_pid,
@@ -288,12 +305,13 @@ static cbcast_received_msg_t *process_data_msg(cbcast_t *cbc,
   case CAUSALITY_DELIVER:
     arrput(cbc->delivery_queue, rcvd);     // Add to delivery queue
     vc_inc(cbc->vclock, rcvd->sender_pid); // Update vector clock
-    process_held_msgs(cbc);                // Process existing held messages
-    return deliver_message(cbc);
+    verify_held_msg_causality(cbc);        // Process existing held messages
+    return deliver_from_queue(cbc);
 
   case CAUSALITY_HOLD:
     arrput(cbc->held_buf, rcvd); // Hold the message
-    return deliver_message(cbc);
+    ask_for_retransmissions(cbc);
+    return deliver_from_queue(cbc);
 
   case CAUSALITY_ERROR:
     fprintf(stderr, "[process_data_msg] Causality error\n");
