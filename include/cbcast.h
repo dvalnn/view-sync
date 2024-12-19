@@ -78,9 +78,8 @@ Result *cbc_add_peer(cbcast_t *cbc, const uint64_t pid, const char *ipv4,
                      const uint16_t port);
 
 // message.c
-Result *cbc_msg_create_header(cbcast_msg_kind_t kind, uint16_t len);
-
-Result *cbc_msg_create(cbcast_msg_hdr_t *header, char *payload);
+Result *cbc_msg_create(const cbcast_msg_kind_t kind, const char *payload,
+                       const uint16_t payload_len);
 void cbc_msg_free(cbcast_msg_t *msg);
 
 char *cbc_msg_serialize(const cbcast_msg_t *msg, size_t *out_size);
@@ -91,9 +90,8 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc);
 void cbc_received_message_free(cbcast_received_msg_t *msg);
 
 // send.c
-// TODO: Fix normalize return types
-void cbc_send(cbcast_t *cbc, cbcast_msg_t *msg);
-Result *cbc_send_to_peer(const cbcast_t *cbc, const char *payload,
-                         const size_t payload_len, const int peer_idx,
+Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len);
+Result *cbc_send_to_peer(const cbcast_t *cbc, const cbcast_peer_t *peer,
+                         const char *payload, const size_t payload_len,
                          const int flags);
 #endif

@@ -161,14 +161,11 @@ static void test_cbcast_rcv_deliverable(void **state) {
   int sender_socket = test_state->sender_socket;
 
   char *msg = "Hello, World! 1";
-  uint64_t msg_len = strlen(msg);
 
-  cbcast_msg_hdr_t *hdr =
-      result_unwrap(cbc_msg_create_header(CBC_DATA, msg_len));
+  cbcast_msg_t *message =
+      result_unwrap(cbc_msg_create(CBC_DATA, msg, strlen(msg)));
+  message->header->clock = 1;
 
-  hdr->clock = 1;
-
-  cbcast_msg_t *message = result_unwrap(cbc_msg_create(hdr, msg));
   size_t ser_size = 0;
   char *msg_bytes = cbc_msg_serialize(message, &ser_size);
   assert_non_null(msg_bytes);
@@ -201,13 +198,10 @@ static void test_cbcast_rcv_held(void **state) {
   int sender_socket = test_state->sender_socket;
 
   char *msg = "Hello, World! 3";
-  uint64_t msg_len = strlen(msg);
+  cbcast_msg_t *message =
+      result_unwrap(cbc_msg_create(CBC_DATA, msg, strlen(msg)));
+  message->header->clock = 3;
 
-  cbcast_msg_hdr_t *hdr =
-      result_unwrap(cbc_msg_create_header(CBC_DATA, msg_len));
-  hdr->clock = 3;
-
-  cbcast_msg_t *message = result_unwrap(cbc_msg_create(hdr, msg));
   size_t ser_size = 0;
   char *msg_bytes = cbc_msg_serialize(message, &ser_size);
   assert_non_null(msg_bytes);
@@ -236,13 +230,10 @@ static void test_cbcast_rcv_release_from_held(void **state) {
   int sender_socket = test_state->sender_socket;
 
   char *msg = "Hello, World! 2";
-  uint64_t msg_len = strlen(msg);
+  cbcast_msg_t *message =
+      result_unwrap(cbc_msg_create(CBC_DATA, msg, strlen(msg)));
+  message->header->clock = 2;
 
-  cbcast_msg_hdr_t *hdr =
-      result_unwrap(cbc_msg_create_header(CBC_DATA, msg_len));
-  hdr->clock = 2;
-
-  cbcast_msg_t *message = result_unwrap(cbc_msg_create(hdr, msg));
   size_t ser_size = 0;
   char *msg_bytes = cbc_msg_serialize(message, &ser_size);
   assert_non_null(msg_bytes);
@@ -262,7 +253,8 @@ static void test_cbcast_rcv_release_from_held(void **state) {
   assert_string_equal(delivered_message->message->payload, msg);
   assert_int_equal(arrlen(cbc->delivery_queue), 1);
   assert_non_null(cbc->delivery_queue[0]);
-  assert_string_equal(cbc->delivery_queue[0]->message->payload, "Hello, World! 3");
+  assert_string_equal(cbc->delivery_queue[0]->message->payload,
+                      "Hello, World! 3");
   free(delivered_message);
 
   delivered_message = cbc_receive(cbc);

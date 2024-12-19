@@ -96,6 +96,9 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc) {
   case CBC_RETRANSMIT:
     return RESULT_UNIMPLEMENTED;
 
+  case CBC_RETRANSMIT_REQ:
+    return RESULT_UNIMPLEMENTED;
+
   case CBC_DATA:
     return process_data_msg(cbc, received);
 
@@ -146,7 +149,7 @@ static char *receive_raw_message(cbcast_t *cbc, struct sockaddr *sender_addr,
     return NULL;
 
   size_t buffer_size = 1024; // Adjust size as needed
-  char *buffer = malloc(buffer_size);
+  char *buffer = calloc(buffer_size, sizeof(char));
   if (!buffer) {
     fprintf(stderr, "[receive_raw_message] Memory allocation failed");
     return NULL;
@@ -171,6 +174,11 @@ static char *receive_raw_message(cbcast_t *cbc, struct sockaddr *sender_addr,
 // Find sender from the list of known peers
 static cbcast_peer_t *find_sender(const cbcast_t *cbc,
                                   const struct sockaddr_in *sender_ipv4) {
+  if (!sender_ipv4) {
+    fprintf(stderr, "[cbc_rcv] Null sender address\n");
+    return NULL;
+  }
+
   for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
     if (memcmp(cbc->peers[i]->addr, sender_ipv4, sizeof(struct sockaddr_in)) ==
         0) {
@@ -179,7 +187,7 @@ static cbcast_peer_t *find_sender(const cbcast_t *cbc,
     }
   }
 
-  char ipv4[INET_ADDRSTRLEN];
+  char ipv4[INET_ADDRSTRLEN] = {0};
   inet_ntop(AF_INET, &sender_ipv4->sin_addr.s_addr, ipv4, INET_ADDRSTRLEN);
   fprintf(stderr, "[cbc_rcv] Unknown sender %s:%d\n", ipv4,
           ntohs(sender_ipv4->sin_port));
@@ -189,10 +197,8 @@ static cbcast_peer_t *find_sender(const cbcast_t *cbc,
 
 static void ack_msg(const cbcast_t *cbc, const cbcast_peer_t *peer,
                     const uint16_t ack_clock) {
-
   // Step 1: Ack the received message
-  cbcast_msg_hdr_t *ack_hdr = result_unwrap(cbc_msg_create_header(CBC_ACK, 0));
-  cbcast_msg_t *ack_msg = result_unwrap(cbc_msg_create(ack_hdr, NULL));
+  cbcast_msg_t *ack_msg = result_unwrap(cbc_msg_create(CBC_ACK, NULL, 0));
   ack_msg->header->clock = ack_clock;
 
   size_t ack_msg_size = 0;
@@ -205,11 +211,12 @@ static void ack_msg(const cbcast_t *cbc, const cbcast_peer_t *peer,
           "message with clock %d.\n",
           cbc->pid, peer->pid, peer->pos, ack_clock);
 
-  result_expect(cbc_send_to_peer(cbc, ack_msg_bytes, ack_msg_size, peer->pos,
-                                 MSG_CONFIRM),
-                err_msg);
+  result_expect(
+      cbc_send_to_peer(cbc, peer, ack_msg_bytes, ack_msg_size, MSG_CONFIRM),
+      err_msg);
 
   free(ack_msg_bytes);
+  cbc_msg_free(ack_msg);
 }
 
 static void verify_held_msg_causality(cbcast_t *cbc) {
@@ -287,14 +294,40 @@ static void ask_for_retransmissions(const cbcast_t *cbc,
     return;
   }
 
+  cbcast_msg_t *retransmit_msg =
+      result_unwrap(cbc_msg_create(CBC_RETRANSMIT_REQ, NULL, 0));
 
+  uint16_t retr_clock = UINT16_MAX;
+
+  // Step 1: find the lowest clock in the held buffer, for the given peer
+  for (int i = 0; i < arrlen(cbc->held_buf); i++) {
+    if (cbc->held_buf[i]->sender_pid == peer->pid &&
+        cbc->held_buf[i]->message->header->clock < retr_clock) {
+      retr_clock = cbc->held_buf[i]->message->header->clock;
+    }
+  }
+
+  if (retr_clock == UINT16_MAX) {
+    return; // No messages to retransmit
+  }
+
+  retransmit_msg->header->clock = retr_clock;
+
+  size_t retransmit_size = 0;
+  char *retransmit_bytes = cbc_msg_serialize(retransmit_msg, &retransmit_size);
+  cbc_send_to_peer(cbc, peer, retransmit_bytes, retransmit_size, MSG_CONFIRM);
+
+  free(retransmit_bytes);
+  cbc_msg_free(retransmit_msg);
 }
 
 static cbcast_received_msg_t *process_data_msg(cbcast_t *cbc,
                                                cbcast_received_msg_t *rcvd) {
 
+  printf("HELLO_THERE\n");
   // Step 1: Ack the message
   ack_msg(cbc, cbc->peers[rcvd->sender_idx], rcvd->message->header->clock);
+  printf("ACKED\n");
 
   // Step 2: Assert Message Causality;
   causality_t causality = vc_check_causality(cbc->vclock, rcvd->sender_pid,
@@ -310,7 +343,7 @@ static cbcast_received_msg_t *process_data_msg(cbcast_t *cbc,
 
   case CAUSALITY_HOLD:
     arrput(cbc->held_buf, rcvd); // Hold the message
-    ask_for_retransmissions(cbc);
+    ask_for_retransmissions(cbc, cbc->peers[rcvd->sender_idx]);
     return deliver_from_queue(cbc);
 
   case CAUSALITY_ERROR:

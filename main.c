@@ -10,7 +10,7 @@
 
 #include "cbcast.h" // Include your cbcast header
 
-#define NUM_WORKERS 5
+#define NUM_WORKERS 2
 #define BASE_PORT 12345
 #define SHM_NAME "/cbc_sync"
 
@@ -57,13 +57,8 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
     if (++counter % 5 == 0) {
       char message[64];
       snprintf(message, sizeof(message), "Hello from worker %lu!", cbc->pid);
-      cbcast_msg_hdr_t *hdr =
-          result_expect(cbc_msg_create_header(CBC_DATA, strlen(message)),
-                        "[worker_process] could not create message header");
-      cbcast_msg_t *msg =
-          result_expect(cbc_msg_create(hdr, message),
-                        "[worker_process] could not create message");
-      cbc_send(cbc, msg);
+      result_expect(cbc_send(cbc, message, strlen(message)),
+                    "[main] Failed to broadcast message");
     }
 
     usleep(250000); // Sleep to simulate processing

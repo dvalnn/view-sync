@@ -32,18 +32,9 @@
       ];
       nativeBuildInputs = with pkgs; [
         man-pages
-
-        # add build dependencies here
-        ## For mesonbuild:
-        #meson ninja
-        ## For cmake:
+        valgrind
         cmake
-        ## For autotools:
-        # autoconf-archive
-        # autoreconfHook
         pkg-config
-        # clangd language server.
-        # Also start your IDE/editor from the shell provided by `nix develop` as the wrapped clangd from clang-tools needs environment variables set by the shell
         clang-tools
       ];
     in
