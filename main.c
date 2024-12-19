@@ -10,7 +10,7 @@
 
 #include "cbcast.h" // Include your cbcast header
 
-#define NUM_WORKERS 2
+#define NUM_WORKERS 3
 #define BASE_PORT 12345
 #define SHM_NAME "/cbc_sync"
 
@@ -122,6 +122,8 @@ int main() {
       }
 
       worker_process(cbc, sync_state); // Start the worker process
+      return EXIT_SUCCESS;
+
     } else if (pid > 0) {
       pids[i] = pid; // Store child PID for later cleanup
     } else {

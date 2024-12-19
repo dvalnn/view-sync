@@ -33,7 +33,8 @@ Result *cbc_init(uint64_t pid, uint64_t max_p, uint16_t port) {
   struct sockaddr_in addr;
   addr.sin_family = AF_INET;
   addr.sin_port = htons(port);
-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  // TODO: Change to function argument
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
   if (bind(cbc->socket_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
     close(cbc->socket_fd);
@@ -67,14 +68,13 @@ void cbc_free(cbcast_t *cbc) {
 
   // Free held buffer
   for (int i = 0; i < arrlen(cbc->held_buf); i++) {
-    cbc_msg_free(cbc->held_buf[i]->message); // Free payload string
-    free(cbc->held_buf[i]);                  // Free the message struct
+    cbc_received_message_free(cbc->held_buf[i]);
   }
   arrfree(cbc->held_buf);
 
   // Free delivery queue
   for (int i = 0; i < arrlen(cbc->delivery_queue); i++) {
-    free(cbc->delivery_queue[i]); // Free each message in the delivery queue
+    cbc_received_message_free(cbc->delivery_queue[i]);
   }
   arrfree(cbc->delivery_queue);
 

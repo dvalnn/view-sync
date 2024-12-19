@@ -19,7 +19,7 @@ static void test_vc_inc(void **state) {
   (void)state;
 
   vector_clock_t *vc = result_unwrap(vc_init(10));
-  (void)result_unwrap(vc_inc(vc, 6));
+  vc_inc(vc, 6);
   assert_int_equal(vc->clock[6], 1);
 }
 

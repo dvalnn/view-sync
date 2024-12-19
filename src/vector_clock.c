@@ -40,19 +40,12 @@ void vc_free(vector_clock_t *vc) {
   free(vc);
 }
 
-Result *vc_inc(vector_clock_t *vc, uint64_t pos) {
-  if (!vc) {
-    return result_new_err("[vc_inc] vc is null");
-  }
-  if (pos >= vc->len) {
-    return result_new_err("[vc_inc] invalid pos");
-  }
-
+uint64_t vc_inc(vector_clock_t *vc, uint64_t pos) {
   pthread_mutex_lock(&vc->mtx);
   uint64_t incd = ++vc->clock[pos];
   pthread_mutex_unlock(&vc->mtx);
 
-  return result_new_ok(&incd);
+  return incd;
 }
 
 Result *vc_snapshot(vector_clock_t *vc) {

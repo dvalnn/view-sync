@@ -5,15 +5,15 @@
 
 // ************** Function Declaration ***************
 //
-static char *serialize_header_only(const cbcast_msg_t *msg, size_t *out_size);
+char *serialize_header_only(const cbcast_msg_t *msg, size_t *out_size);
 
-static char *serialize_full(const cbcast_msg_t *msg, size_t *out_size);
+char *serialize_full(const cbcast_msg_t *msg, size_t *out_size);
 
-static Result *create_msg_with_header(const cbcast_msg_kind_t kind);
+Result *create_msg_with_header(const cbcast_msg_kind_t kind);
 
-static Result *create_msg_with_payload(const cbcast_msg_kind_t kind,
-                                       const char *payload,
-                                       const uint16_t payload_len);
+Result *create_msg_with_payload(const cbcast_msg_kind_t kind,
+                                const char *payload,
+                                const uint16_t payload_len);
 
 // ************** Public Functions ***************
 //
@@ -48,8 +48,8 @@ void cbc_msg_free(cbcast_msg_t *msg) {
 }
 
 char *cbc_msg_serialize(const cbcast_msg_t *msg, size_t *out_size) {
-  if (!msg || !msg->header) {
-    fprintf(stderr, "[cbc_msg_serialize] Invalid message or header\n");
+  if (!msg || !msg->header || !out_size) {
+    fprintf(stderr, "[cbc_msg_serialize] Invalid arguments\n");
     return NULL;
   }
 
@@ -124,42 +124,49 @@ Result *cbc_msg_deserialize(const char *bytes) {
 
 // ************** Private Functions ***************
 //
-static char *serialize_header_only(const cbcast_msg_t *msg, size_t *out_size) {
-  size_t total_size = sizeof(cbcast_msg_hdr_t);
-  char *serialized = calloc(total_size, sizeof(char));
+char *serialize_header_only(const cbcast_msg_t *msg, size_t *out_size) {
+  *out_size = sizeof(cbcast_msg_hdr_t);
+  char *serialized = calloc(*out_size, sizeof(*serialized));
   if (!serialized) {
     fprintf(stderr, "[cbc_msg_serialize_heartbeat] Memory allocation failed\n");
     return NULL;
   }
 
-  memcpy(serialized, msg->header, sizeof(cbcast_msg_hdr_t));
-  *out_size = total_size;
+  memcpy(serialized, msg->header, *out_size);
   return serialized;
 }
 
-static char *serialize_full(const cbcast_msg_t *msg, size_t *out_size) {
-  if (!msg->header->len || !msg->payload) {
-    fprintf(stderr, "[cbc_msg_serialize_data] Invalid message\n");
+char *serialize_full(const cbcast_msg_t *msg, size_t *out_size) {
+  if (!msg || !msg->header || !msg->payload || !msg->header->len) {
+    fprintf(stderr, "[serialize_full] Invalid message\n");
     return NULL;
   }
 
-  char *serialized = serialize_header_only(msg, out_size);
+  // Calculate sizes
+  size_t header_size = sizeof(cbcast_msg_hdr_t);
+  size_t payload_size = msg->header->len + 1; // +1 for null-terminator
+  size_t total_size = header_size + payload_size;
+
+  // Allocate memory for the serialized message
+  char *serialized = calloc(total_size, sizeof(char));
   if (!serialized) {
-    fprintf(stderr, "[cbc_msg_serialize_data] serialize_header_only failed\n");
+    fprintf(stderr, "[serialize_full] Memory allocation failed\n");
     return NULL;
   }
 
-  size_t total_size = *out_size + msg->header->len + 1;
-  memcpy(serialized + *out_size, msg->payload, msg->header->len + 1);
+  // Serialize the header into the allocated memory
+  memcpy(serialized, msg->header, header_size);
+
+  // Serialize the payload directly after the header
+  memcpy(serialized + header_size, msg->payload, payload_size);
+
+  // Set the output size
   *out_size = total_size;
+
   return serialized;
 }
 
-static Result *create_msg_with_payload(const cbcast_msg_kind_t kind,
-                                       const char *payload,
-                                       const uint16_t payload_len);
-
-static Result *create_msg_with_header(const cbcast_msg_kind_t kind) {
+Result *create_msg_with_header(const cbcast_msg_kind_t kind) {
   cbcast_msg_hdr_t *hdr = calloc(1, sizeof(cbcast_msg_hdr_t));
   if (!hdr) {
     return result_new_err("[cbc_create_msg_header] Alloc failed");
@@ -177,9 +184,9 @@ static Result *create_msg_with_header(const cbcast_msg_kind_t kind) {
   return result_new_ok(message);
 }
 
-static Result *create_msg_with_payload(const cbcast_msg_kind_t kind,
-                                       const char *payload,
-                                       const uint16_t payload_len) {
+Result *create_msg_with_payload(const cbcast_msg_kind_t kind,
+                                const char *payload,
+                                const uint16_t payload_len) {
   if (!payload || !payload_len) {
     return result_new_err("[cbc_create_message] Invalid header or payload");
   }
