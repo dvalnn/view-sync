@@ -62,9 +62,9 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc) {
 
   struct sockaddr sender_addr;
   memset(&sender_addr, 0, sizeof(sender_addr)); // Ensure full initialization
-                                                //
+
   size_t recv_len = 0;
-  socklen_t addr_len = 0;
+  socklen_t addr_len = sizeof(struct sockaddr_in);
 
   // Step 1: Receive the raw message
   char *buffer = receive_raw_message(cbc, &sender_addr, &addr_len, &recv_len);

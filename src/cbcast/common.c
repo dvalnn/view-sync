@@ -33,7 +33,6 @@ Result *cbc_init(uint64_t pid, uint64_t max_p, uint16_t port) {
   struct sockaddr_in addr;
   addr.sin_family = AF_INET;
   addr.sin_port = htons(port);
-  // TODO: Change to function argument
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
   if (bind(cbc->socket_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
