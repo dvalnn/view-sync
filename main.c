@@ -8,8 +8,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define CBCAST_UPD_NETSIM // Comment this line to disable packet loss simulation
-#include "cbcast.h" // Include your cbcast header
+#include "cbcast.h"
+#include "lib/stb_ds.h"
 
 #define NUM_WORKERS 2
 #define BASE_PORT 12345
@@ -45,7 +45,10 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
 
   printf("Worker %lu starting broadcast phase.\n", cbc->pid);
 
+  int cycle = 0;
   while (running) {
+    printf("----\nWorker %lu cycle %d start.\n", cbc->pid, ++cycle);
+
     cbcast_received_msg_t *received_msg = cbc_receive(cbc);
     if (received_msg) {
       printf("[main] Worker %lu received: \"%s\" from peer %d\n", cbc->pid,
@@ -61,6 +64,14 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
       result_expect(cbc_send(cbc, message, strlen(message)),
                     "[main] Failed to broadcast message");
     }
+
+    printf("Worker %lu cycle %d summary:\n"
+           "DelivQ\tSize: %td\n"
+           "HeldQ\tSize: %td\n"
+           "SentQ\tSize: %td\n"
+           "----\n",
+           cbc->pid, cycle, arrlen(cbc->delivery_queue), arrlen(cbc->held_buf),
+           arrlen(cbc->sent_buf));
 
     usleep(250000); // Sleep to simulate processing
   }

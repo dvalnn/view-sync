@@ -33,7 +33,7 @@ Result *cbc_send_to_peer(const cbcast_t *cbc, const cbcast_peer_t *peer,
 // ************** Network Sim wrappers ***************
 //
 #ifndef PACKET_LOSS_PROBABILITY
-#define PACKET_LOSS_PROBABILITY 0.2
+#define PACKET_LOSS_PROBABILITY 0.3
 #endif
 
 static void seed_random() {
