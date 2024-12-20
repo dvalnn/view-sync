@@ -7,18 +7,17 @@ Result *vc_init(const uint64_t size) {
     return result_new_err("[vc_init] invalid size");
   }
 
-  vector_clock_t *vc = malloc(sizeof(vector_clock_t));
+  vector_clock_t *vc = calloc(1, sizeof(vector_clock_t));
   if (!vc) {
     return result_new_err("[vc_init] failed to allocate vector_clock_t");
   }
 
-  vc->clock = malloc(sizeof(uint64_t) * size);
+  vc->clock = calloc(size, sizeof(uint64_t));
   if (!vc->clock) {
     free(vc);
     return result_new_err("[vc_init] failed to allocate vc->clock");
   }
   vc->len = size;
-  memset(vc->clock, 0, vc->len * sizeof(*vc->clock));
 
   pthread_mutexattr_t mtx_attrs;
   pthread_mutexattr_init(&mtx_attrs);
@@ -46,19 +45,4 @@ uint64_t vc_inc(vector_clock_t *vc, uint64_t pos) {
   pthread_mutex_unlock(&vc->mtx);
 
   return incd;
-}
-
-Result *vc_snapshot(vector_clock_t *vc) {
-  if (!vc) {
-    return result_new_err("[vc_snapshot] vc is null");
-  }
-
-  pthread_mutex_lock(&vc->mtx);
-
-  uint64_t *snap_vec = malloc(sizeof(uint64_t) * vc->len);
-  memcpy(snap_vec, vc->clock, sizeof(uint64_t) * vc->len);
-
-  pthread_mutex_unlock(&vc->mtx);
-
-  return result_new_ok(snap_vec);
 }

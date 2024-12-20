@@ -57,7 +57,7 @@ void cbc_broadcast(cbcast_t *cbc, cbcast_msg_t *msg, int flags) {
 // Stores the sent message in sent_msgs and returns a Result
 Result *cbc_store_sent_message(cbcast_t *cbc, cbcast_msg_t *msg) {
 
-  cbcast_sent_msg_t *out = malloc(sizeof(cbcast_sent_msg_t));
+  cbcast_sent_msg_t *out = calloc(1, sizeof(cbcast_sent_msg_t));
   if (!out) {
     return result_new_err("[cbc_store_sent_message] malloc out");
   }

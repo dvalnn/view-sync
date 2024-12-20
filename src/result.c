@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 Result *result_new_ok(void *value) {
-  Result *r = (Result *)malloc(sizeof(Result));
+  Result *r = (Result *)calloc(1, sizeof(Result));
   r->_is_ok = true;
   r->ok = value;
   r->err = nullptr;
@@ -12,7 +12,7 @@ Result *result_new_ok(void *value) {
 }
 
 Result *result_new_err(const char *error) {
-  Result *r = (Result *)malloc(sizeof(Result));
+  Result *r = (Result *)calloc(1, sizeof(Result));
   r->_is_ok = false;
   r->ok = nullptr;
   r->err = error;

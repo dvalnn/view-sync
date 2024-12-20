@@ -52,7 +52,7 @@ static Result *view_exec_change(view_t *view, const view_change_t change) {
 }
 
 Result *view_init(uint16_t *gm_ids, size_t n_ids) {
-  view_t *new_view = (view_t *)malloc(sizeof(view_t));
+  view_t *new_view = (view_t *)calloc(1, sizeof(view_t));
   if (!new_view) {
     return result_new_err("Failed to allocate memory for new view");
   };
@@ -93,7 +93,7 @@ Result *view_next(view_t *previous, view_change_t *changes, size_t n_changes) {
     return result_new_err("next_view() called with invalid arguments");
   }
 
-  view_t *next_view = (view_t *)malloc(sizeof(view_t));
+  view_t *next_view = (view_t *)calloc(1, sizeof(view_t));
   if (!next_view) {
     return result_new_err("Failed to allocate memory for new view");
   }

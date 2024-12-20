@@ -14,7 +14,7 @@ Result *cbc_init(uint64_t pid, uint64_t max_p, uint16_t port) {
   }
 
   // Allocate memory for the cbcast_t struct
-  cbcast_t *cbc = malloc(sizeof(cbcast_t));
+  cbcast_t *cbc = calloc(1, sizeof(cbcast_t));
   if (!cbc) {
     return result_new_err("[cbc_init] malloc failed");
   }
@@ -114,7 +114,7 @@ Result *cbc_add_peer(cbcast_t *cbc, const uint64_t pid, const char *ipv4,
     return result_new_err(
         "[cbc_add_peer] Failed to allocate memory for new peer\n");
   }
-  new_peer->addr = malloc(sizeof(*new_peer->addr));
+  new_peer->addr = calloc(1, sizeof(*new_peer->addr));
   if (!new_peer->addr) {
     free(new_peer);
     return result_new_err(
