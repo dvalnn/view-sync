@@ -11,7 +11,7 @@
 #include "cbcast.h"
 #include "lib/stb_ds.h"
 
-#define NUM_WORKERS 2
+#define NUM_WORKERS 5
 #define BASE_PORT 12345
 #define SHM_NAME "/cbc_sync"
 
@@ -46,19 +46,21 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
   printf("Worker %lu starting broadcast phase.\n", cbc->pid);
 
   int cycle = 0;
+  int received_counter = 0;
   while (running) {
-    printf("----\nWorker %lu cycle %d start.\n", cbc->pid, ++cycle);
+    /* printf("----\nWorker %lu cycle %d start.\n", cbc->pid, ++cycle); */
 
     cbcast_received_msg_t *received_msg = cbc_receive(cbc);
     if (received_msg) {
-      printf("[main] Worker %lu received: \"%s\" from peer %d\n", cbc->pid,
-             received_msg->message->payload, received_msg->sender_pid);
+      printf("[main] Worker %lu received: \"%s\" %d from peer %d\n", cbc->pid,
+             received_msg->message->payload, received_counter,
+             received_msg->sender_pid);
       cbc_received_message_free(received_msg);
     }
 
     // Broadcast a message periodically
     static int counter = 0;
-    if (++counter % 5 == 0) {
+    if (++counter % 10 == 0) {
       char message[64];
       snprintf(message, sizeof(message), "Hello from worker %lu!", cbc->pid);
       result_expect(cbc_send(cbc, message, strlen(message)),
@@ -70,7 +72,7 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
            "HeldQ\tSize: %td\n"
            "SentQ\tSize: %td\n"
            "----\n",
-           cbc->pid, cycle, arrlen(cbc->delivery_queue), arrlen(cbc->held_buf),
+           cbc->pid, ++cycle, arrlen(cbc->delivery_queue), arrlen(cbc->held_buf),
            arrlen(cbc->sent_buf));
 
     usleep(250000); // Sleep to simulate processing

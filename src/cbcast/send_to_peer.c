@@ -14,10 +14,10 @@ Result *cbc_send_to_peer(const cbcast_t *cbc, const cbcast_peer_t *peer,
     return result_new_err("[cbc_send_to_peer] Invalid payload");
   }
 
-  cbcast_msg_hdr_t *header = (cbcast_msg_hdr_t *)payload;
-  printf("[cbc_send_to_peer] Worker %lu sending message type %d with clock %d "
-         "to peer %lu\n",
-         cbc->pid, header->kind, header->clock, peer->pid);
+  /* cbcast_msg_hdr_t *header = (cbcast_msg_hdr_t *)payload; */
+  /* printf("[cbc_send_to_peer] Worker %lu sending message type %d with clock %d " */
+  /*        "to peer %lu\n", */
+  /*        cbc->pid, header->kind, header->clock, peer->pid); */
 
   ssize_t sent_bytes =
       sendto(cbc->socket_fd, payload, payload_len, flags,
@@ -33,7 +33,7 @@ Result *cbc_send_to_peer(const cbcast_t *cbc, const cbcast_peer_t *peer,
 // ************** Network Sim wrappers ***************
 //
 #ifndef PACKET_LOSS_PROBABILITY
-#define PACKET_LOSS_PROBABILITY 0.3
+#define PACKET_LOSS_PROBABILITY 0.1
 #endif
 
 static void seed_random() {

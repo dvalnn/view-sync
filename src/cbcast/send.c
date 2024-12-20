@@ -30,8 +30,8 @@ Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len) {
 
   msg->header->clock = vc_inc(cbc->vclock, cbc->pid);
 
-  printf("[cbc_send] cbc_pid %lu broadcasting message with clock %d\n",
-         cbc->pid, msg->header->clock);
+  /* printf("[cbc_send] cbc_pid %lu broadcasting message with clock %d\n", */
+  /*        cbc->pid, msg->header->clock); */
 
   cbc_broadcast(cbc, msg, 0);
 

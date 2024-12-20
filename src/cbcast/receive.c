@@ -44,7 +44,9 @@ void process_retransmission_req(cbcast_t *cbc, cbcast_received_msg_t *ret_req);
 cbcast_received_msg_t *process_data_msg(cbcast_t *cbc,
                                         cbcast_received_msg_t *rcvd);
 
-cbcast_received_msg_t *deliver_from_queue(cbcast_t *cbc);
+cbcast_received_msg_t *deliver_and_request_retransmission(cbcast_t *cbc);
+
+void check_and_request_retransmissions(cbcast_t *cbc);
 
 // ************** Public Functions ***************
 //
@@ -71,14 +73,14 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc) {
   // Step 1: Receive the raw message
   char *buffer = receive_raw_message(cbc, &sender_addr, &addr_len, &recv_len);
   if (!buffer) // No data or error
-    return deliver_from_queue(cbc);
+    return deliver_and_request_retransmission(cbc);
 
   // Step 1: Identify the sender
   struct sockaddr_in sender_ipv4 = *(struct sockaddr_in *)&sender_addr;
   cbcast_peer_t *sender = find_sender(cbc, &sender_ipv4);
   if (!sender) {
     free(buffer);
-    return deliver_from_queue(cbc);
+    return deliver_and_request_retransmission(cbc);
   }
 
   // Step 3: Deserialize the received message
@@ -86,16 +88,17 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc) {
   free(buffer);
   if (result_is_err(serialize_res)) {
     result_free(serialize_res);
-    return deliver_from_queue(cbc);
+    return deliver_and_request_retransmission(cbc);
   }
 
   cbcast_received_msg_t *received = result_unwrap(create_received_message(
       result_unwrap(serialize_res), sender->pid, sender->pos));
 
-  printf("[cbc_receive] cbc pid %lu received message type %d with clock %d "
-         "from peer %lu\n",
-         cbc->pid, received->message->header->kind,
-         received->message->header->clock, sender->pid);
+  /* printf("[cbc_receive] cbc pid %lu received message type %d with clock %d "
+   */
+  /*        "from peer %lu\n", */
+  /*        cbc->pid, received->message->header->kind, */
+  /*        received->message->header->clock, sender->pid); */
 
   switch (received->message->header->kind) {
   case CBC_DATA:
@@ -103,18 +106,18 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc) {
 
   case CBC_ACK:
     process_ack(cbc, received);
-    return deliver_from_queue(cbc);
+    return deliver_and_request_retransmission(cbc);
 
   case CBC_RETRANSMIT_REQ:
     process_retransmission_req(cbc, received);
-    return deliver_from_queue(cbc);
+    return deliver_and_request_retransmission(cbc);
 
   case CBC_RETRANSMIT:
     return RESULT_UNREACHABLE;
 
   case CBC_HEARTBEAT:
     arrput(cbc->delivery_queue, received);
-    return deliver_from_queue(cbc);
+    return deliver_and_request_retransmission(cbc);
 
   default:
     return RESULT_UNREACHABLE;
@@ -245,7 +248,9 @@ void verify_held_msg_causality(cbcast_t *cbc) {
   }
 }
 
-cbcast_received_msg_t *deliver_from_queue(cbcast_t *cbc) {
+cbcast_received_msg_t *deliver_and_request_retransmission(cbcast_t *cbc) {
+  check_and_request_retransmissions(cbc);
+
   // Return message in delivery queue, if any
   if (arrlen(cbc->delivery_queue) <= 0) {
     return NULL; // No message ready for delivery
@@ -278,6 +283,10 @@ void process_ack(cbcast_t *cbc, cbcast_received_msg_t *ack) {
 
   cbcast_sent_msg_t *acked_msg = cbc->sent_buf[msg_index];
   acked_msg->confirms[ack->sender_idx] = 1;
+  /* printf("[process_ack] cbc pid: %lu ACK received from peer %hu for message "
+   */
+  /*        "with clock %d\n", */
+  /*        cbc->pid, ack->sender_pid, acked_msg->message->header->clock); */
 
   // Check if all peers have ACKed the message
   for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
@@ -287,9 +296,11 @@ void process_ack(cbcast_t *cbc, cbcast_received_msg_t *ack) {
   }
 
   // debug print
-  printf("[process_ack] cbc pid: %lu All ACKs received for message with clock "
-         "%d\n",
-         cbc->pid, acked_msg->message->header->clock);
+  /* printf( */
+  /*     "[process_ack] cbc pid: %lu All ACKs received for message with clock
+   * %d. " */
+  /*     "Removing from sent buffer\n", */
+  /*     cbc->pid, acked_msg->message->header->clock); */
 
   // All ACKs received, remove from sent buffer
   arrdelswap(cbc->sent_buf, msg_index);
@@ -308,25 +319,12 @@ void ask_for_retransmissions(const cbcast_t *cbc, const cbcast_peer_t *peer) {
   cbcast_msg_t *retransmit_msg =
       result_unwrap(cbc_msg_create(CBC_RETRANSMIT_REQ, NULL, 0));
 
-  uint16_t retr_clock = UINT16_MAX;
+  retransmit_msg->header->clock = cbc->vclock->clock[peer->pid] + 1;
 
-  // Step 1: find the lowest clock in the held buffer, for the given peer
-  for (int i = 0; i < arrlen(cbc->held_buf); i++) {
-    if (cbc->held_buf[i]->sender_pid == peer->pid &&
-        cbc->held_buf[i]->message->header->clock < retr_clock) {
-      retr_clock = cbc->held_buf[i]->message->header->clock;
-    }
-  }
-
-  if (retr_clock == UINT16_MAX) {
-    return; // No messages to retransmit
-  }
-
-  retransmit_msg->header->clock = retr_clock - 1;
-
-  printf("[ask_for_retransmissions] cbc pid %lu Requesting retransmission for "
-         "clock %d from peer %lu\n",
-         cbc->pid, retransmit_msg->header->clock, peer->pid);
+  /* printf("[ask_for_retransmissions] cbc pid %lu Requesting retransmission for
+   * " */
+  /*        "clock %d from peer %lu\n", */
+  /*        cbc->pid, retransmit_msg->header->clock, peer->pid); */
 
   size_t retransmit_size = 0;
   char *retransmit_bytes = cbc_msg_serialize(retransmit_msg, &retransmit_size);
@@ -354,23 +352,22 @@ cbcast_received_msg_t *process_data_msg(cbcast_t *cbc,
 
   case CAUSALITY_HOLD:
     arrput(cbc->held_buf, rcvd); // Hold the message
-    ask_for_retransmissions(cbc, cbc->peers[rcvd->sender_idx]);
     break;
 
   case CAUSALITY_ERROR:
-    fprintf(stderr,
-            "[process_data_msg] Causality error cbc pid %lu sender %hu "
-            "received clock %d expected clock %lu\n",
-            cbc->pid, rcvd->sender_pid, rcvd->message->header->clock,
-            cbc->vclock->clock[rcvd->sender_pid] + 1);
-    return RESULT_UNREACHABLE;
+    /* fprintf(stderr, */
+    /*         "[process_data_msg] Causality error cbc pid %lu sender %hu " */
+    /*         "received clock %d expected clock %lu\n", */
+    /*         cbc->pid, rcvd->sender_pid, rcvd->message->header->clock, */
+    /*         cbc->vclock->clock[rcvd->sender_pid] + 1); */
+    break;
 
   default:
     return RESULT_UNREACHABLE;
   };
 
   ack_msg(cbc, cbc->peers[rcvd->sender_idx], rcvd->message->header->clock);
-  return deliver_from_queue(cbc);
+  return deliver_and_request_retransmission(cbc);
 }
 
 void process_retransmission_req(cbcast_t *cbc, cbcast_received_msg_t *ret_req) {
@@ -390,13 +387,11 @@ void process_retransmission_req(cbcast_t *cbc, cbcast_received_msg_t *ret_req) {
     }
   }
 
-  // This may happen if the message was already delivered to all peers,
-  // but a late due to ordering of events a retransmission request was still
-  // sent. In this case, we can ignore the request.
   if (!sent_msg) {
-    printf("[process_retransmission_req] cbc pid %lu No message found for "
-           "retransmission request with clock %d\n",
-           cbc->pid, ret_req->message->header->clock);
+    /* printf("[process_retransmission_req] cbc pid %lu No message found for "
+     */
+    /*        "retransmission request with clock %d\n", */
+    /*        cbc->pid, ret_req->message->header->clock); */
     return (void)RESULT_UNREACHABLE;
   }
 
@@ -411,4 +406,28 @@ void process_retransmission_req(cbcast_t *cbc, cbcast_received_msg_t *ret_req) {
 
   free(retransmit_bytes);
   cbc_received_message_free(ret_req);
+}
+
+void check_and_request_retransmissions(cbcast_t *cbc) {
+  if (!cbc || !arrlen(cbc->held_buf)) {
+    return; // Nothing to process
+  }
+
+  for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
+    cbcast_peer_t *peer = cbc->peers[i];
+
+    // Check if there are held messages for this peer
+    bool has_held_messages = false;
+    for (size_t j = 0; j < (size_t)arrlen(cbc->held_buf); j++) {
+      if (cbc->held_buf[j]->sender_pid == peer->pid) {
+        has_held_messages = true;
+        break;
+      }
+    }
+
+    // If held messages exist, request retransmissions
+    if (has_held_messages) {
+      ask_for_retransmissions(cbc, peer);
+    }
+  }
 }
