@@ -14,6 +14,11 @@ Result *cbc_send_to_peer(const cbcast_t *cbc, const cbcast_peer_t *peer,
     return result_new_err("[cbc_send_to_peer] Invalid payload");
   }
 
+  cbcast_msg_hdr_t *header = (cbcast_msg_hdr_t *)payload;
+  printf("[cbc_send_to_peer] Worker %lu sending message type %d with clock %d "
+         "to peer %lu\n",
+         cbc->pid, header->kind, header->clock, peer->pid);
+
   ssize_t sent_bytes =
       sendto(cbc->socket_fd, payload, payload_len, flags,
              (struct sockaddr *)peer->addr, sizeof(struct sockaddr_in));

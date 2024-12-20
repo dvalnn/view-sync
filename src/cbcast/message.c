@@ -90,8 +90,15 @@ Result *cbc_msg_deserialize(const char *bytes) {
   }
   memcpy(msg->header, bytes, sizeof(cbcast_msg_hdr_t));
 
-  if (msg->header->kind == CBC_HEARTBEAT || msg->header->kind == CBC_ACK) {
+  switch (msg->header->kind) {
+  case CBC_ACK:
+  case CBC_RETRANSMIT_REQ:
+  case CBC_HEARTBEAT:
     return result_new_ok(msg); // no payload
+
+  case CBC_DATA:
+  case CBC_RETRANSMIT:
+    break;
   }
 
   // Validate header length to prevent overflows

@@ -177,6 +177,10 @@ char *receive_raw_message(cbcast_t *cbc, struct sockaddr *sender_addr,
     return NULL;
   }
 
+  cbcast_msg_hdr_t *header = (cbcast_msg_hdr_t *)buffer;
+  printf("[receive_raw_message] Received message type %d with clock %d\n",
+         header->kind, header->clock);
+
   return buffer;
 }
 
@@ -246,13 +250,17 @@ void verify_held_msg_causality(cbcast_t *cbc) {
 
 cbcast_received_msg_t *deliver_from_queue(cbcast_t *cbc) {
   // Return message in delivery queue, if any
-  if (arrlen(cbc->delivery_queue) > 0) {
-    cbcast_received_msg_t *delivered_msg = cbc->delivery_queue[0];
-    arrdel(cbc->delivery_queue, 0); // Remove from queue
-    return delivered_msg;
+  if (arrlen(cbc->delivery_queue) <= 0) {
+    return NULL; // No message ready for delivery
   }
 
-  return NULL; // No message ready for delivery
+  cbcast_received_msg_t *delivered_msg = cbc->delivery_queue[0];
+
+  ack_msg(cbc, cbc->peers[delivered_msg->sender_idx],
+          delivered_msg->message->header->clock);
+
+  arrdel(cbc->delivery_queue, 0); // Remove from queue
+  return delivered_msg;
 }
 
 void process_ack(cbcast_t *cbc, cbcast_received_msg_t *rcvd) {
@@ -336,8 +344,6 @@ void ask_for_retransmissions(const cbcast_t *cbc, const cbcast_peer_t *peer) {
 
 cbcast_received_msg_t *process_data_msg(cbcast_t *cbc,
                                         cbcast_received_msg_t *rcvd) {
-  // Step 1: Ack the message
-  ack_msg(cbc, cbc->peers[rcvd->sender_idx], rcvd->message->header->clock);
 
   // Step 2: Assert Message Causality;
   causality_t causality = vc_check_causality(cbc->vclock, rcvd->sender_pid,
@@ -356,7 +362,7 @@ cbcast_received_msg_t *process_data_msg(cbcast_t *cbc,
            rcvd->message->header->clock);
     arrput(cbc->held_buf, rcvd); // Hold the message
     ask_for_retransmissions(cbc, cbc->peers[rcvd->sender_idx]);
-    return deliver_from_queue(cbc);
+    return NULL;
 
   case CAUSALITY_ERROR:
     fprintf(stderr, "[process_data_msg] Causality error\n");
