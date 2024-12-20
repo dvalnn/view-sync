@@ -21,6 +21,8 @@ typedef enum CausalityType causality_t;
 causality_t vc_check_causality(vector_clock_t *vclock, uint64_t pid,
                                uint64_t clock);
 
+void retransmit_msg_missing_ack(cbcast_t *cbc);
+
 char *receive_raw_message(cbcast_t *cbc, struct sockaddr *sender_addr,
                           socklen_t *addr_len, size_t *recv_len);
 
@@ -250,6 +252,7 @@ void verify_held_msg_causality(cbcast_t *cbc) {
 
 cbcast_received_msg_t *deliver_and_request_retransmission(cbcast_t *cbc) {
   check_and_request_retransmissions(cbc);
+  retransmit_msg_missing_ack(cbc);
 
   // Return message in delivery queue, if any
   if (arrlen(cbc->delivery_queue) <= 0) {
@@ -338,6 +341,8 @@ void ask_for_retransmissions(const cbcast_t *cbc, const cbcast_peer_t *peer) {
 cbcast_received_msg_t *process_data_msg(cbcast_t *cbc,
                                         cbcast_received_msg_t *rcvd) {
 
+  ack_msg(cbc, cbc->peers[rcvd->sender_idx], rcvd->message->header->clock);
+
   // Step 2: Assert Message Causality;
   causality_t causality = vc_check_causality(cbc->vclock, rcvd->sender_pid,
                                              rcvd->message->header->clock);
@@ -351,10 +356,23 @@ cbcast_received_msg_t *process_data_msg(cbcast_t *cbc,
     break;
 
   case CAUSALITY_HOLD:
+    // check if the message is already in the held buffer to avoid duplicates
+    for (size_t i = 0; i < (size_t)arrlen(cbc->held_buf); i++) {
+      if (cbc->held_buf[i]->message->header->clock ==
+              rcvd->message->header->clock &&
+          cbc->held_buf[i]->sender_pid == rcvd->sender_pid) {
+        printf("[process_data_msg] cbc pid %lu Duplicate message received "
+               "from peer %hu with clock %d\n",
+               cbc->pid, rcvd->sender_pid, rcvd->message->header->clock);
+        break;
+      }
+    }
+
     arrput(cbc->held_buf, rcvd); // Hold the message
     break;
 
   case CAUSALITY_ERROR:
+    // Ignore. It may be a retransmission
     /* fprintf(stderr, */
     /*         "[process_data_msg] Causality error cbc pid %lu sender %hu " */
     /*         "received clock %d expected clock %lu\n", */
@@ -366,7 +384,6 @@ cbcast_received_msg_t *process_data_msg(cbcast_t *cbc,
     return RESULT_UNREACHABLE;
   };
 
-  ack_msg(cbc, cbc->peers[rcvd->sender_idx], rcvd->message->header->clock);
   return deliver_and_request_retransmission(cbc);
 }
 
@@ -430,4 +447,22 @@ void check_and_request_retransmissions(cbcast_t *cbc) {
       ask_for_retransmissions(cbc, peer);
     }
   }
+}
+
+void retransmit_msg_missing_ack(cbcast_t *cbc) {
+  if (arrlen(cbc->sent_buf) <= 10) {
+    return;
+  }
+
+  cbcast_sent_msg_t *msg = cbc->sent_buf[0];
+  size_t msg_size = 0;
+  char *msg_bytes = cbc_msg_serialize(msg->message, &msg_size);
+
+  for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
+    if (!msg->confirms[i]) {
+      cbc_send_to_peer(cbc, cbc->peers[i], msg_bytes, msg_size, 0);
+    }
+  }
+
+  free(msg_bytes);
 }

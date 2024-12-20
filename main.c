@@ -53,7 +53,7 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
     cbcast_received_msg_t *received_msg = cbc_receive(cbc);
     if (received_msg) {
       printf("[main] Worker %lu received: \"%s\" %d from peer %d\n", cbc->pid,
-             received_msg->message->payload, received_counter,
+             received_msg->message->payload, ++received_counter,
              received_msg->sender_pid);
       cbc_received_message_free(received_msg);
     }
@@ -72,8 +72,8 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
            "HeldQ\tSize: %td\n"
            "SentQ\tSize: %td\n"
            "----\n",
-           cbc->pid, ++cycle, arrlen(cbc->delivery_queue), arrlen(cbc->held_buf),
-           arrlen(cbc->sent_buf));
+           cbc->pid, ++cycle, arrlen(cbc->delivery_queue),
+           arrlen(cbc->held_buf), arrlen(cbc->sent_buf));
 
     usleep(250000); // Sleep to simulate processing
   }
