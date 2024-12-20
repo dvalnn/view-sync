@@ -8,9 +8,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#define CBCAST_UPD_NETSIM // Comment this line to disable packet loss simulation
 #include "cbcast.h" // Include your cbcast header
 
-#define NUM_WORKERS 3
+#define NUM_WORKERS 2
 #define BASE_PORT 12345
 #define SHM_NAME "/cbc_sync"
 

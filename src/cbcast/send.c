@@ -12,6 +12,7 @@ void cbc_broadcast(cbcast_t *cbc, cbcast_msg_t *msg, int flags);
 
 // ************** Public Functions ***************
 //
+
 Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len) {
   if (!cbc || !payload || !payload_len) {
     return result_new_err("[cbc_send] Invalid arguments");
@@ -37,28 +38,6 @@ Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len) {
   return cbc_store_sent_message(cbc, msg);
 }
 
-Result *cbc_send_to_peer(const cbcast_t *cbc, const cbcast_peer_t *peer,
-                         const char *payload, const size_t payload_len,
-                         const int flags) {
-  if (!peer || !peer->addr) {
-    return result_new_err("[cbc_send_to_peer] Invalid peer or address");
-  }
-
-  if (!payload || !payload_len) {
-    return result_new_err("[cbc_send_to_peer] Invalid payload");
-  }
-
-  ssize_t sent_bytes =
-      sendto(cbc->socket_fd, payload, payload_len, flags,
-             (struct sockaddr *)peer->addr, sizeof(struct sockaddr_in));
-
-  if (sent_bytes < 0) {
-    return result_new_err("[cbc_send_to_peer] sendto failed");
-  }
-
-  return result_new_ok(NULL);
-}
-
 // ************** Private Functions ***************
 //
 
@@ -69,7 +48,7 @@ void cbc_broadcast(cbcast_t *cbc, cbcast_msg_t *msg, int flags) {
   for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
     result_expect(
         cbc_send_to_peer(cbc, cbc->peers[i], msg_bytes, msg_len, flags),
-        "[cbc_send_heartbeat] send failed");
+        "[cbc_send_broadcast] send failed");
   }
 
   free(msg_bytes);

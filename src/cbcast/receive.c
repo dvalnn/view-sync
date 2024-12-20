@@ -90,23 +90,29 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc) {
   cbcast_received_msg_t *received = result_unwrap(create_received_message(
       result_unwrap(serialize_res), sender->pid, sender->pos));
 
+  printf("[cbc_receive] cbc pid %lu received message type %d with clock %d "
+         "from peer %lu\n",
+         cbc->pid, received->message->header->kind,
+         received->message->header->clock, sender->pid);
+
   switch (received->message->header->kind) {
-  case CBC_HEARTBEAT:
-    arrput(cbc->delivery_queue, received);
-    return deliver_from_queue(cbc);
-
-  case CBC_RETRANSMIT:
-    return RESULT_UNIMPLEMENTED;
-
-  case CBC_RETRANSMIT_REQ:
-    return RESULT_UNIMPLEMENTED;
-
   case CBC_DATA:
     return process_data_msg(cbc, received);
 
   case CBC_ACK:
     process_ack(cbc, received);
     cbc_received_message_free(received);
+    return deliver_from_queue(cbc);
+
+  case CBC_RETRANSMIT_REQ:
+    printf("[cbc_receive] Retransmit request received\n");
+    return RESULT_UNIMPLEMENTED;
+
+  case CBC_RETRANSMIT:
+    return RESULT_UNIMPLEMENTED;
+
+  case CBC_HEARTBEAT:
+    arrput(cbc->delivery_queue, received);
     return deliver_from_queue(cbc);
 
   default:
@@ -177,7 +183,7 @@ char *receive_raw_message(cbcast_t *cbc, struct sockaddr *sender_addr,
 // Find sender from the list of known peers
 cbcast_peer_t *find_sender(const cbcast_t *cbc,
                            const struct sockaddr_in *sender_ipv4) {
-  if (!sender_ipv4) {
+  if (!sender_ipv4 || !cbc) {
     fprintf(stderr, "[cbc_rcv] Null sender address\n");
     return NULL;
   }
@@ -313,11 +319,16 @@ void ask_for_retransmissions(const cbcast_t *cbc, const cbcast_peer_t *peer) {
     return; // No messages to retransmit
   }
 
-  retransmit_msg->header->clock = retr_clock;
+  retransmit_msg->header->clock = retr_clock - 1;
+
+  printf("[ask_for_retransmissions] cbc pid %lu Requesting retransmission for "
+         "clock %d from peer %lu\n",
+         cbc->pid, retransmit_msg->header->clock, peer->pid);
 
   size_t retransmit_size = 0;
   char *retransmit_bytes = cbc_msg_serialize(retransmit_msg, &retransmit_size);
-  cbc_send_to_peer(cbc, peer, retransmit_bytes, retransmit_size, MSG_CONFIRM);
+  result_unwrap(
+      cbc_send_to_peer(cbc, peer, retransmit_bytes, retransmit_size, 0));
 
   free(retransmit_bytes);
   cbc_msg_free(retransmit_msg);
@@ -341,6 +352,8 @@ cbcast_received_msg_t *process_data_msg(cbcast_t *cbc,
     return deliver_from_queue(cbc);
 
   case CAUSALITY_HOLD:
+    printf("[process_data_msg] Holding message with clock %d\n",
+           rcvd->message->header->clock);
     arrput(cbc->held_buf, rcvd); // Hold the message
     ask_for_retransmissions(cbc, cbc->peers[rcvd->sender_idx]);
     return deliver_from_queue(cbc);

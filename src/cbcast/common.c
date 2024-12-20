@@ -109,7 +109,7 @@ Result *cbc_add_peer(cbcast_t *cbc, const uint64_t pid, const char *ipv4,
   }
 
   // Allocate memory for the new peer
-  cbcast_peer_t *new_peer = malloc(sizeof(cbcast_peer_t));
+  cbcast_peer_t *new_peer = calloc(1, sizeof(cbcast_peer_t));
   if (!new_peer) {
     return result_new_err(
         "[cbc_add_peer] Failed to allocate memory for new peer\n");

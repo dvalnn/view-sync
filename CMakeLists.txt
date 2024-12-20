@@ -20,6 +20,7 @@ set(SRC_FILES
     src/cbcast/message.c
     src/cbcast/receive.c
     src/cbcast/send.c
+    src/cbcast/send_to_peer.c
 
     # Third party
     src/lib/stb_ds.c
@@ -39,6 +40,7 @@ add_executable(${PROJECT_NAME} main.c ${SRC_FILES})
 
 find_package(json-c CONFIG)
 target_link_libraries(${PROJECT_NAME} PRIVATE json-c::json-c)
+target_link_options(${PROJECT_NAME} PRIVATE -Wl,--wrap=cbc_send_to_peer)
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror)
 
 # ----- Project testing ----- # 
