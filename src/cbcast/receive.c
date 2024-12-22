@@ -23,6 +23,8 @@ void handle_data_msg(cbcast_t *cbc, cbcast_msg_t *msg, uint16_t sender_pid);
 
 void register_ack(cbcast_t *cbc, cbcast_msg_t *msg, uint16_t sender_pid);
 
+void recheck_held_messages(cbcast_t *cbc, uint16_t sender_pid);
+
 void request_retransmission(cbcast_t *cbc, uint16_t sender_pid);
 
 void queue_retransmission(cbcast_t *cbc, cbcast_msg_t *msg,
@@ -97,7 +99,6 @@ void *cbc_recv_thread(void *arg) {
     switch (msg->header->kind) {
     case CBC_DATA:
     case CBC_RETRANSMIT:
-      ack_received_message(cbc, msg->header->clock, sender_pid);
       handle_data_msg(cbc, msg, sender_pid);
       break;
 
@@ -140,6 +141,10 @@ void ack_received_message(cbcast_t *cbc, uint16_t ack_clock,
   cbcast_outgoing_msg_t *outgoing =
       result_unwrap(cbc_outgoing_msg_create(ack_msg, sender_addr));
 
+  printf("[ack_received_message] cbc pid %lu sending ACK for message clock %d "
+         "to peer %d\n",
+         cbc->pid, ack_clock, sender_pid);
+
   pthread_mutex_lock(&cbc->send_lock);
   arrput(cbc->send_queue, outgoing);
   pthread_mutex_unlock(&cbc->send_lock);
@@ -154,10 +159,14 @@ causality_t check_msg_causality(vector_clock_t *vclock, uint64_t pid,
   }
 
   if (vclock->clock[pid] + 1 == clock) {
+    printf("[check_msg_causality] cbc pid %lu delivering message %lu\n",
+           vclock->clock[pid], clock);
     return CAUSALITY_DELIVER;
   }
 
   if (vclock->clock[pid] + 1 < clock) {
+    printf("[check_msg_causality] cbc pid %lu delivering message %lu\n",
+           vclock->clock[pid], clock);
     return CAUSALITY_HOLD;
   }
 
@@ -186,12 +195,35 @@ void request_retransmission(cbcast_t *cbc, uint16_t sender_pid) {
   cbcast_outgoing_msg_t *outgoing =
       result_unwrap(cbc_outgoing_msg_create(retransmit_req, sender_addr));
 
+  printf("[request_retransmission] cbc pid %lu requesting retransmission from "
+         "peer %d for message clock %lu\n",
+         cbc->pid, sender_pid, expected_clock);
+
   pthread_mutex_lock(&cbc->send_lock);
   arrput(cbc->send_queue, outgoing);
   pthread_mutex_unlock(&cbc->send_lock);
 
   pthread_cond_signal(&cbc->send_cond);
 };
+
+void recheck_held_messages(cbcast_t *cbc, uint16_t sender_pid) {
+  for (size_t i = 0; i < (size_t)arrlen(cbc->held_msg_buffer); i++) {
+    cbcast_received_msg_t *held_msg = cbc->held_msg_buffer[i];
+    if (held_msg->sender_pid == sender_pid) {
+      pthread_mutex_lock(&cbc->vclock->mtx);
+
+      if (check_msg_causality(cbc->vclock, sender_pid,
+                              held_msg->message->header->clock) ==
+          CAUSALITY_DELIVER) {
+        arrput(cbc->delivery_queue, held_msg);
+        arrdel(cbc->held_msg_buffer, i);
+        i--;
+      }
+
+      pthread_mutex_unlock(&cbc->vclock->mtx);
+    }
+  }
+}
 
 void handle_data_msg(cbcast_t *cbc, cbcast_msg_t *msg, uint16_t sender_pid) {
   if (!cbc || !msg) {
@@ -218,19 +250,36 @@ void handle_data_msg(cbcast_t *cbc, cbcast_msg_t *msg, uint16_t sender_pid) {
     return (void)RESULT_UNREACHABLE;
 
   case CAUSALITY_DELIVER:
+    printf("[handle_data_msg] cbc pid %lu received message %d from peer %d\n",
+           cbc->pid, msg->header->clock, sender_pid);
+
+    ack_received_message(cbc, msg->header->clock, sender_pid);
+
     pthread_mutex_lock(&cbc->recv_lock);
     {
       pthread_mutex_lock(&cbc->vclock->mtx);
-      // increment the vector clock
       { cbc->vclock->clock[sender_pid]++; }
       pthread_mutex_unlock(&cbc->vclock->mtx);
 
       arrput(cbc->delivery_queue, rcvd);
+      if (msg->header->kind == CBC_RETRANSMIT) {
+        printf("[handle_data_msg] cbc pid %lu received retransmitted message "
+               "%d from peer %d\n",
+               cbc->pid, msg->header->clock, sender_pid);
+
+        recheck_held_messages(cbc, sender_pid);
+      }
     }
     pthread_mutex_unlock(&cbc->recv_lock);
+
     break;
 
   case CAUSALITY_HOLD:
+    printf("[handle_data_msg] cbc pid %lu holding message %d from peer %d\n",
+           cbc->pid, msg->header->clock, sender_pid);
+
+    ack_received_message(cbc, msg->header->clock, sender_pid);
+
     pthread_mutex_lock(&cbc->recv_lock);
     arrput(cbc->held_msg_buffer, rcvd);
     pthread_mutex_unlock(&cbc->recv_lock);
@@ -268,14 +317,14 @@ void register_ack(cbcast_t *cbc, cbcast_msg_t *ack, uint16_t sender_pid) {
 
   cbcast_sent_msg_t *sent_msg = cbc->sent_msg_buffer[msg_idx];
   sent_msg->ack_bitmap |= 1 << sender_pid;
-  printf(
-      "[register_ack] cbc pid %lu received ACK from peer %d for message %d\n",
-      cbc->pid, sender_pid, ack->header->clock);
+  printf("[register_ack] cbc pid %lu received ACK from peer %d for message "
+         "clock %d\n",
+         cbc->pid, sender_pid, ack->header->clock);
 
   if (sent_msg->ack_bitmap == sent_msg->ack_target) {
     arrdel(cbc->sent_msg_buffer, msg_idx);
-    printf("[register_ack] cbc pid %lu message %d fully acked\n", cbc->pid,
-           ack->header->clock);
+    printf("[register_ack] cbc pid %lu message clock %d fully acked\n",
+           cbc->pid, ack->header->clock);
   }
 }
 
@@ -303,16 +352,21 @@ void queue_retransmission(cbcast_t *cbc, cbcast_msg_t *msg,
 
   if (!retransmit_msg) {
     fprintf(stderr,
-            "[queue_retransmission] No message found for retransmission "
-            "request with clock %d\n",
-            msg->header->clock);
+            "[queue_retransmission] cbc pid %lu No message found for "
+            "retransmission request from %d with clock %d\n",
+            cbc->pid, sender_pid, msg->header->clock);
     return;
   }
 
   struct sockaddr_in *sender_addr = cbc_peer_get_addr_copy(cbc, sender_pid);
-
+  retransmit_msg->header->clock = msg->header->clock;
   cbcast_outgoing_msg_t *outgoing =
       result_unwrap(cbc_outgoing_msg_create(retransmit_msg, sender_addr));
+
+  printf(
+      "[queue_retransmission] cbc pid %lu retransmitting message clock %d to "
+      "peer %d\n",
+      cbc->pid, retransmit_msg->header->clock, sender_pid);
 
   pthread_mutex_lock(&cbc->send_lock);
   arrput(cbc->send_queue, outgoing);

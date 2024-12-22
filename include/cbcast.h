@@ -16,8 +16,7 @@
 #define CBC_Q_LEN 20
 #endif
 
-/* #define NETWORK_SIMULATION */
-#define NETWORK_SIMULATION_DELAY 1000
+#define NETWORK_SIMULATION
 #define NETWORK_SIMULATION_DROP 10
 
 enum CBcastMessageType {

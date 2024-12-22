@@ -1,5 +1,12 @@
 #include "cbcast.h"
 #include "lib/stb_ds.h"
+
+#ifdef NETWORK_SIMULATION
+#ifdef NETWORK_SIMULATION_DROP
+#include "unistd.h"
+#endif
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -53,9 +60,29 @@ uint64_t broadcast(cbcast_t *cbc, const char *msg_bytes, const size_t msg_size,
   {
     for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
       struct sockaddr_in *addr = cbc->peers[i]->addr;
+
+#ifdef NETWORK_SIMULATION
+#ifdef NETWORK_SIMULATION_DROP
+      if (rand() % 100 < NETWORK_SIMULATION_DROP) {
+
+        cbcast_msg_kind_t kind = *(cbcast_msg_kind_t *)(msg_bytes);
+        uint16_t msg_clock =
+            *(uint16_t *)(msg_bytes + sizeof(cbcast_msg_kind_t));
+
+        printf("[broadcast] cbc pid %lu dropping message type %d clock %hu to "
+               "peer %lu\n",
+               cbc->pid, kind, msg_clock, cbc->peers[i]->pid);
+      } else {
+        sendto(cbc->socket_fd, msg_bytes, msg_size, flags,
+               (struct sockaddr *)addr, sizeof(*addr));
+      }
+      ack_target |= 1 << cbc->peers[i]->pid;
+#endif
+#else
       sendto(cbc->socket_fd, msg_bytes, msg_size, flags,
              (struct sockaddr *)addr, sizeof(*addr));
       ack_target |= 1 << cbc->peers[i]->pid;
+#endif
     }
   }
   pthread_mutex_unlock(&cbc->peer_lock);
@@ -68,7 +95,6 @@ void *cbc_send_thread(void *arg) {
 #ifdef NETWORK_SIMULATION
 #ifdef NETWORK_SIMULATION_DROP
   // Seed the random number generator
-#include "unistd.h"
   int seed = time(NULL) ^ getpid();
   srand(seed); // Combine time and process ID for unique seed
 #endif
