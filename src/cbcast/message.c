@@ -127,6 +127,90 @@ Result *cbc_msg_deserialize(const char *bytes) {
   return result_new_ok(msg);
 }
 
+Result *cbc_outgoing_msg_create(cbcast_msg_t *msg, struct sockaddr_in *addr) {
+  if (!msg || !addr) {
+    return result_new_err("[cbc_outgoing_msg_create] Invalid arguments");
+  }
+
+  cbcast_outgoing_msg_t *out = calloc(1, sizeof(cbcast_outgoing_msg_t));
+  if (!out) {
+    return result_new_err("[cbc_outgoing_msg_create] Memory allocation failed");
+  }
+
+  out->message = msg;
+  out->addr = addr;
+  return result_new_ok(out);
+}
+
+void cbc_outgoing_msg_free(cbcast_outgoing_msg_t *msg) {
+  if (!msg) {
+    return;
+  }
+  if (msg->message) {
+    cbc_msg_free(msg->message);
+  }
+  if (msg->addr) {
+    free(msg->addr);
+  }
+  free(msg);
+}
+
+Result *cbc_sent_msg_create(cbcast_msg_t *msg) {
+  if (!msg) {
+    return result_new_err("[cbc_sent_msg_create] Invalid arguments");
+  }
+
+  cbcast_sent_msg_t *out = calloc(1, sizeof(cbcast_sent_msg_t));
+  if (!out) {
+    return result_new_err("[cbc_sent_msg_create] Memory allocation failed");
+  }
+
+  out->message = msg;
+  out->confirms = calloc(1, sizeof(uint8_t));
+  if (!out->confirms) {
+    free(out);
+    return result_new_err("[cbc_sent_msg_create] Memory allocation failed");
+  }
+
+  return result_new_ok(out);
+}
+
+void cbc_sent_msg_free(cbcast_sent_msg_t *msg) {
+  if (!msg) {
+    return;
+  }
+  if (msg->message) {
+    cbc_msg_free(msg->message);
+  }
+  free(msg->confirms);
+  free(msg);
+}
+
+Result *cbc_received_msg_create(cbcast_msg_t *msg, uint16_t sender_pid) {
+  if (!msg) {
+    return result_new_err("[cbc_received_msg_create] Invalid arguments");
+  }
+
+  cbcast_received_msg_t *out = calloc(1, sizeof(cbcast_received_msg_t));
+  if (!out) {
+    return result_new_err("[cbc_received_msg_create] Memory allocation failed");
+  }
+
+  out->message = msg;
+  out->sender_pid = sender_pid;
+  return result_new_ok(out);
+}
+
+void cbc_received_msg_free(cbcast_received_msg_t *msg) {
+  if (!msg) {
+    return;
+  }
+  if (msg->message) {
+    cbc_msg_free(msg->message);
+  }
+  free(msg);
+}
+
 // ************** Private Functions ***************
 //
 char *serialize_header_only(const cbcast_msg_t *msg, size_t *out_size) {

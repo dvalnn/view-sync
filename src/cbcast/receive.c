@@ -145,18 +145,6 @@ causality_t vc_check_causality(vector_clock_t *vclock, uint64_t pid,
   return CAUSALITY_ERROR;
 }
 
-Result *create_received_message(cbcast_msg_t *msg, uint16_t sender_pid,
-                                uint16_t sender_idx) {
-  cbcast_received_msg_t *received = calloc(1, sizeof(cbcast_received_msg_t));
-  if (!received) {
-    return result_new_err("[create_received_message] Memory allocation failed");
-  }
-  received->message = msg;
-  received->sender_pid = sender_pid;
-  received->sender_idx = sender_idx;
-  return result_new_ok(received);
-}
-
 // Receive raw message from the socket
 char *receive_raw_message(cbcast_t *cbc, struct sockaddr *sender_addr,
                           socklen_t *addr_len, size_t *recv_len) {
@@ -226,29 +214,28 @@ void ack_msg(const cbcast_t *cbc, const cbcast_peer_t *peer,
           "message with clock %d.\n",
           cbc->pid, peer->pid, peer->pos, ack_clock);
 
-  result_expect(
-      cbc_send_to_peer(cbc, peer, ack_msg_bytes, ack_msg_size, MSG_CONFIRM),
-      err_msg);
+  result_expect(cbc_sendto(cbc, peer, ack_msg_bytes, ack_msg_size, MSG_CONFIRM),
+                err_msg);
 
   free(ack_msg_bytes);
   cbc_msg_free(ack_msg);
 }
 
-void verify_held_msg_causality(cbcast_t *cbc) {
-  for (size_t i = 0; i < (size_t)arrlen(cbc->held_buf);) {
-    cbcast_received_msg_t *held_msg = cbc->held_buf[i];
-    if (vc_check_causality(cbc->vclock, held_msg->sender_pid,
-                           held_msg->message->header->clock) == 0) {
-      arrput(cbc->delivery_queue, held_msg);
-      (void)vc_inc(cbc->vclock, held_msg->sender_pid);
-
-      // Remove from held buffer
-      arrdel(cbc->held_buf, i);
-    } else {
-      i++; // Only increment if not removing
-    }
-  }
-}
+/* void verify_held_msg_causality(cbcast_t *cbc) { */
+/*   for (size_t i = 0; i < (size_t)arrlen(cbc->held_buf);) { */
+/*     cbcast_received_msg_t *held_msg = cbc->held_buf[i]; */
+/*     if (vc_check_causality(cbc->vclock, held_msg->sender_pid, */
+/*                            held_msg->message->header->clock) == 0) { */
+/*       arrput(cbc->delivery_queue, held_msg); */
+/*       (void)vc_inc(cbc->vclock, held_msg->sender_pid); */
+/**/
+/*       // Remove from held buffer */
+/*       arrdel(cbc->held_buf, i); */
+/*     } else { */
+/*       i++; // Only increment if not removing */
+/*     } */
+/*   } */
+/* } */
 
 cbcast_received_msg_t *deliver_and_request_retransmission(cbcast_t *cbc) {
   check_and_request_retransmissions(cbc);
@@ -331,8 +318,7 @@ void ask_for_retransmissions(const cbcast_t *cbc, const cbcast_peer_t *peer) {
 
   size_t retransmit_size = 0;
   char *retransmit_bytes = cbc_msg_serialize(retransmit_msg, &retransmit_size);
-  result_unwrap(
-      cbc_send_to_peer(cbc, peer, retransmit_bytes, retransmit_size, 0));
+  result_unwrap(cbc_sendto(cbc, peer, retransmit_bytes, retransmit_size, 0));
 
   free(retransmit_bytes);
   cbc_msg_free(retransmit_msg);
@@ -417,9 +403,9 @@ void process_retransmission_req(cbcast_t *cbc, cbcast_received_msg_t *ret_req) {
   char *retransmit_bytes =
       cbc_msg_serialize(sent_msg->message, &retransmit_size);
 
-  result_expect(cbc_send_to_peer(cbc, sender, retransmit_bytes, retransmit_size,
-                                 MSG_CONFIRM),
-                "Peer should be valid");
+  result_expect(
+      cbc_sendto(cbc, sender, retransmit_bytes, retransmit_size, MSG_CONFIRM),
+      "Peer should be valid");
 
   free(retransmit_bytes);
   cbc_received_message_free(ret_req);
@@ -460,7 +446,7 @@ void retransmit_msg_missing_ack(cbcast_t *cbc) {
 
   for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
     if (!msg->confirms[i]) {
-      cbc_send_to_peer(cbc, cbc->peers[i], msg_bytes, msg_size, 0);
+      cbc_sendto(cbc, cbc->peers[i], msg_bytes, msg_size, 0);
     }
   }
 

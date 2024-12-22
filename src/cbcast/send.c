@@ -3,16 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// ************** Function Declaration ***************
-//
-
-Result *cbc_store_sent_message(cbcast_t *cbc, cbcast_msg_t *msg);
-
-void cbc_broadcast(cbcast_t *cbc, cbcast_msg_t *msg, int flags);
-
 // ************** Public Functions ***************
-//
-
 Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len) {
   if (!cbc || !payload || !payload_len) {
     return result_new_err("[cbc_send] Invalid arguments");
@@ -28,42 +19,27 @@ Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len) {
   }
   cbcast_msg_t *msg = result_expect(msg_create_res, "unfallible expect");
 
-  msg->header->clock = vc_inc(cbc->vclock, cbc->pid);
+  pthread_mutex_lock(&cbc->vclock->mtx);
+  msg->header->clock = ++cbc->vclock->clock[cbc->pid];
+  pthread_mutex_unlock(&cbc->vclock->mtx);
 
   /* printf("[cbc_send] cbc_pid %lu broadcasting message with clock %d\n", */
   /*        cbc->pid, msg->header->clock); */
 
-  cbc_broadcast(cbc, msg, 0);
-
-  return cbc_store_sent_message(cbc, msg);
-}
-
-// ************** Private Functions ***************
-//
-
-void cbc_broadcast(cbcast_t *cbc, cbcast_msg_t *msg, int flags) {
-  size_t msg_len = 0;
-  char *msg_bytes = cbc_msg_serialize(msg, &msg_len);
-
+  pthread_mutex_lock(&cbc->peer_lock);
   for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
-    result_expect(
-        cbc_send_to_peer(cbc, cbc->peers[i], msg_bytes, msg_len, flags),
-        "[cbc_send_broadcast] send failed");
+    cbcast_peer_t *peer = cbc->peers[i];
+    cbcast_outgoing_msg_t *outgoing =
+        result_expect(cbc_outgoing_msg_create(msg, peer->addr),
+                      "[cbc_send] Failed to create outgoing message");
+
+    pthread_mutex_lock(&cbc->send_lock);
+    arrput(cbc->send_queue, outgoing);
+    pthread_mutex_lock(&cbc->send_lock);
   }
+  pthread_mutex_unlock(&cbc->peer_lock);
 
-  free(msg_bytes);
-}
+  pthread_cond_signal(&cbc->send_cond);
 
-// Stores the sent message in sent_msgs and returns a Result
-Result *cbc_store_sent_message(cbcast_t *cbc, cbcast_msg_t *msg) {
-
-  cbcast_sent_msg_t *out = calloc(1, sizeof(cbcast_sent_msg_t));
-  if (!out) {
-    return result_new_err("[cbc_store_sent_message] malloc out");
-  }
-  out->confirms = calloc(arrlen(cbc->peers), sizeof(*out->confirms));
-  out->message = msg;
-
-  arrput(cbc->sent_buf, out);
   return result_new_ok(NULL);
 }

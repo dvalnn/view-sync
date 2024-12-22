@@ -73,7 +73,7 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
            "SentQ\tSize: %td\n"
            "----\n",
            cbc->pid, ++cycle, arrlen(cbc->delivery_queue),
-           arrlen(cbc->held_buf), arrlen(cbc->sent_buf));
+           arrlen(cbc->held_msg_buf), arrlen(cbc->unstable_messages));
 
     usleep(250000); // Sleep to simulate processing
   }

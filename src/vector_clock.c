@@ -38,11 +38,3 @@ void vc_free(vector_clock_t *vc) {
   free(vc->clock);
   free(vc);
 }
-
-uint64_t vc_inc(vector_clock_t *vc, uint64_t pos) {
-  pthread_mutex_lock(&vc->mtx);
-  uint64_t incd = ++vc->clock[pos];
-  pthread_mutex_unlock(&vc->mtx);
-
-  return incd;
-}
