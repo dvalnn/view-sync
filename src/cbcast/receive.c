@@ -95,6 +95,7 @@ void *cbc_recv_thread(void *arg) {
       continue;
     }
     cbcast_msg_t *msg = result_expect(msg_deserialize_raw, "unreachable");
+    free(full_msg_buffer);
 
     switch (msg->header->kind) {
     case CBC_DATA:
@@ -330,6 +331,7 @@ void register_ack(cbcast_t *cbc, cbcast_msg_t *ack, uint16_t sender_pid) {
          cbc->pid, sender_pid, ack->header->clock);
 
   if (sent_msg->ack_bitmap == sent_msg->ack_target) {
+    cbc_sent_msg_free(sent_msg);
     arrdel(cbc->sent_msg_buffer, msg_idx);
     printf("[register_ack] cbc pid %lu message clock %d fully acked\n",
            cbc->pid, ack->header->clock);

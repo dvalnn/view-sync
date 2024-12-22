@@ -167,6 +167,8 @@ void cbc_free(cbcast_t *cbc) {
   pthread_mutex_destroy(&cbc->recv_lock);
   pthread_mutex_destroy(&cbc->peer_lock);
 
+  pthread_cond_destroy(&cbc->send_cond);
+
   // Free the cbcast_t structure
   free(cbc);
 }
@@ -179,4 +181,7 @@ void cbc_stop(cbcast_t *cbc) {
   // kill send and receive threads
   pthread_cancel(cbc->send_thread);
   pthread_cancel(cbc->recv_thread);
+
+  pthread_join(cbc->send_thread, NULL);
+  pthread_join(cbc->recv_thread, NULL);
 }
