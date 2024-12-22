@@ -165,7 +165,7 @@ causality_t check_msg_causality(vector_clock_t *vclock, uint64_t pid,
   }
 
   if (vclock->clock[pid] + 1 < clock) {
-    printf("[check_msg_causality] cbc pid %lu delivering message %lu\n",
+    printf("[check_msg_causality] cbc pid %lu holding message %lu\n",
            vclock->clock[pid], clock);
     return CAUSALITY_HOLD;
   }
@@ -210,6 +210,10 @@ void recheck_held_messages(cbcast_t *cbc, uint16_t sender_pid) {
   for (size_t i = 0; i < (size_t)arrlen(cbc->held_msg_buffer); i++) {
     cbcast_received_msg_t *held_msg = cbc->held_msg_buffer[i];
     if (held_msg->sender_pid == sender_pid) {
+      printf("[recheck_held_messages] cbc pid %lu rechecking held message %d "
+             "from peer %d\n",
+             cbc->pid, held_msg->message->header->clock, sender_pid);
+
       pthread_mutex_lock(&cbc->vclock->mtx);
 
       if (check_msg_causality(cbc->vclock, sender_pid,
@@ -218,6 +222,10 @@ void recheck_held_messages(cbcast_t *cbc, uint16_t sender_pid) {
         arrput(cbc->delivery_queue, held_msg);
         arrdel(cbc->held_msg_buffer, i);
         i--;
+        cbc->vclock->clock[sender_pid]++;
+        printf("[recheck_held_messages] cbc pid %lu re-delivering message %d "
+               "from peer %d\n",
+               cbc->pid, held_msg->message->header->clock, sender_pid);
       }
 
       pthread_mutex_unlock(&cbc->vclock->mtx);

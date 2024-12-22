@@ -11,7 +11,7 @@
 #include "cbcast.h"
 #include "lib/stb_ds.h"
 
-#define NUM_WORKERS 2
+#define NUM_WORKERS 5
 #define BASE_PORT 12345
 #define SHM_NAME "/cbc_sync"
 
