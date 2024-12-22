@@ -1,4 +1,5 @@
 #include "cbcast.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -128,8 +129,13 @@ Result *cbc_msg_deserialize(const char *bytes) {
 }
 
 Result *cbc_outgoing_msg_create(cbcast_msg_t *msg, struct sockaddr_in *addr) {
-  if (!msg || !addr) {
+  if (!msg) {
     return result_new_err("[cbc_outgoing_msg_create] Invalid arguments");
+  }
+
+  if (!addr && msg->header->kind != CBC_DATA) {
+    return result_new_err(
+        "[cbc_outgoing_msg_create] Null address for non-data message");
   }
 
   cbcast_outgoing_msg_t *out = calloc(1, sizeof(cbcast_outgoing_msg_t));
@@ -155,7 +161,7 @@ void cbc_outgoing_msg_free(cbcast_outgoing_msg_t *msg) {
   free(msg);
 }
 
-Result *cbc_sent_msg_create(cbcast_msg_t *msg) {
+Result *cbc_sent_msg_create(cbcast_msg_t *msg, uint16_t ack_target) {
   if (!msg) {
     return result_new_err("[cbc_sent_msg_create] Invalid arguments");
   }
@@ -166,11 +172,8 @@ Result *cbc_sent_msg_create(cbcast_msg_t *msg) {
   }
 
   out->message = msg;
-  out->confirms = calloc(1, sizeof(uint8_t));
-  if (!out->confirms) {
-    free(out);
-    return result_new_err("[cbc_sent_msg_create] Memory allocation failed");
-  }
+  out->ack_target = ack_target;
+  out->ack_bitmap = 0;
 
   return result_new_ok(out);
 }
@@ -182,7 +185,6 @@ void cbc_sent_msg_free(cbcast_sent_msg_t *msg) {
   if (msg->message) {
     cbc_msg_free(msg->message);
   }
-  free(msg->confirms);
   free(msg);
 }
 

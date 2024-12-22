@@ -44,18 +44,19 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
   }
 
   printf("Worker %lu starting broadcast phase.\n", cbc->pid);
+  result_unwrap(cbc_start(cbc));
 
   int cycle = 0;
   int received_counter = 0;
   while (running) {
-    /* printf("----\nWorker %lu cycle %d start.\n", cbc->pid, ++cycle); */
+    printf("- Worker %lu cycle %d start.\n", cbc->pid, ++cycle);
 
     cbcast_received_msg_t *received_msg = cbc_receive(cbc);
     if (received_msg) {
       printf("[main] Worker %lu received: \"%s\" %d from peer %d\n", cbc->pid,
              received_msg->message->payload, ++received_counter,
              received_msg->sender_pid);
-      cbc_received_message_free(received_msg);
+      cbc_received_msg_free(received_msg);
     }
 
     // Broadcast a message periodically
@@ -67,18 +68,46 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
                     "[main] Failed to broadcast message");
     }
 
-    printf("Worker %lu cycle %d summary:\n"
-           "DelivQ\tSize: %td\n"
-           "HeldQ\tSize: %td\n"
-           "SentQ\tSize: %td\n"
-           "----\n",
-           cbc->pid, ++cycle, arrlen(cbc->delivery_queue),
-           arrlen(cbc->held_msg_buf), arrlen(cbc->unstable_messages));
-
     usleep(250000); // Sleep to simulate processing
   }
 
   printf("Worker %lu shutting down.\n", cbc->pid);
+  cbc_stop(cbc);
+
+  // Print overall stats
+  printf("Worker %lu final state:\n"
+         "  - sent messages: %lu\n"
+         "  - delivery queue length: %td\n"
+         "  - hold buffer length: %td\n"
+         "  - sent buffer length: %td\n",
+         cbc->pid, cbc->vclock->clock[cbc->pid], arrlen(cbc->delivery_queue),
+         arrlen(cbc->held_msg_buffer), arrlen(cbc->sent_msg_buffer));
+
+  // Dump delivery queue state
+  printf("Worker %lu delivery queue:\n", cbc->pid);
+  for (size_t i = 0; i < (size_t)arrlen(cbc->delivery_queue); i++) {
+    cbcast_received_msg_t *msg = cbc->delivery_queue[i];
+    printf("  - %lu: \"%s\" %d from peer %d\n", i, msg->message->payload,
+           msg->message->header->clock, msg->sender_pid);
+  }
+
+  // Dump held buffer state
+  printf("Worker %lu held buffer:\n", cbc->pid);
+  for (size_t i = 0; i < (size_t)arrlen(cbc->held_msg_buffer); i++) {
+    cbcast_received_msg_t *msg = cbc->held_msg_buffer[i];
+    printf("  - %lu: \"%s\" %d from peer %d\n", i, msg->message->payload,
+           msg->message->header->clock, msg->sender_pid);
+  }
+
+  // Dump sent buffer state
+  printf("Worker %lu sent buffer:\n", cbc->pid);
+  for (size_t i = 0; i < (size_t)arrlen(cbc->sent_msg_buffer); i++) {
+    cbcast_sent_msg_t *msg = cbc->sent_msg_buffer[i];
+    printf("  - %lu: \"%s\" %d ack target %lu ack state %lu \n", i,
+           msg->message->payload, msg->message->header->clock, msg->ack_target,
+           msg->ack_bitmap);
+  }
+
   cbc_free(cbc);
   exit(0);
 }
@@ -137,7 +166,6 @@ int main() {
 
       worker_process(cbc, sync_state); // Start the worker process
       return EXIT_SUCCESS;
-
     } else if (pid > 0) {
       pids[i] = pid; // Store child PID for later cleanup
     } else {

@@ -62,7 +62,7 @@ Result *cbc_init(uint64_t pid, uint64_t max_p, uint16_t port) {
     pthread_mutex_init(&cbc->peer_lock, &peer_lock_attr);
   }
 
-  // Init send thread
+  // Init send thread lock and condition
   {
     pthread_mutexattr_t send_lock_attr;
     pthread_mutexattr_init(&send_lock_attr);
@@ -71,24 +71,33 @@ Result *cbc_init(uint64_t pid, uint64_t max_p, uint16_t port) {
     pthread_condattr_t send_cond_attr;
     pthread_condattr_init(&send_cond_attr);
     pthread_cond_init(&cbc->send_cond, &send_cond_attr);
-
-    pthread_attr_t send_thread_attr;
-    pthread_attr_init(&send_thread_attr);
-    pthread_create(&cbc->send_thread, &send_thread_attr, cbc_send_thread, cbc);
   }
 
-  // Init recv thread
+  // Init recv thread lock
   {
     pthread_mutexattr_t recv_lock_attr;
     pthread_mutexattr_init(&recv_lock_attr);
     pthread_mutex_init(&cbc->recv_lock, &recv_lock_attr);
-
-    pthread_attr_t recv_thread_attr;
-    pthread_attr_init(&recv_thread_attr);
-    pthread_create(&cbc->recv_thread, &recv_thread_attr, cbc_recv_thread, cbc);
   }
 
   return result_new_ok(cbc);
+}
+
+Result *cbc_start(cbcast_t *cbc) {
+  if (!cbc) {
+    return result_new_err("[cbc_start] Invalid arguments");
+  }
+
+  // Start the send and receive threads
+  pthread_attr_t send_thread_attr;
+  pthread_attr_init(&send_thread_attr);
+  pthread_create(&cbc->send_thread, &send_thread_attr, cbc_send_thread, cbc);
+
+  pthread_attr_t recv_thread_attr;
+  pthread_attr_init(&recv_thread_attr);
+  pthread_create(&cbc->recv_thread, &recv_thread_attr, cbc_recv_thread, cbc);
+
+  return result_new_ok(NULL);
 }
 
 void cbc_free(cbcast_t *cbc) {
@@ -153,10 +162,6 @@ void cbc_free(cbcast_t *cbc) {
     close(cbc->socket_fd);
   }
 
-  // kill send and receive threads
-  pthread_cancel(cbc->send_thread);
-  pthread_cancel(cbc->recv_thread);
-
   // Destroy locks
   pthread_mutex_destroy(&cbc->send_lock);
   pthread_mutex_destroy(&cbc->recv_lock);
@@ -164,4 +169,14 @@ void cbc_free(cbcast_t *cbc) {
 
   // Free the cbcast_t structure
   free(cbc);
+}
+
+void cbc_stop(cbcast_t *cbc) {
+  if (!cbc) {
+    return;
+  }
+
+  // kill send and receive threads
+  pthread_cancel(cbc->send_thread);
+  pthread_cancel(cbc->recv_thread);
 }
