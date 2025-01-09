@@ -10,6 +10,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+void retransmit_old_with_missing_acks(cbcast_t *cbc);
+uint16_t get_current_clock(cbcast_t *cbc);
+cbcast_sent_msg_t **find_old_messages(cbcast_t *cbc, uint16_t current_clock);
+void retransmit_messages(cbcast_t *cbc, cbcast_sent_msg_t **old_msgs);
+uint64_t *find_unacked_peers(cbcast_t *cbc, cbcast_sent_msg_t *old_sent);
+void queue_retransmit_messages(cbcast_t *cbc, cbcast_sent_msg_t *old_sent,
+                               uint64_t *target_peers);
+
 Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len) {
   if (!cbc || !payload || !payload_len) {
     return result_new_err("[cbc_send] Invalid arguments");
@@ -40,9 +48,119 @@ Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len) {
   arrput(cbc->send_queue, outgoing);
   pthread_mutex_unlock(&cbc->send_lock);
 
+  retransmit_old_with_missing_acks(cbc);
+
   pthread_cond_signal(&cbc->send_cond);
 
   return result_new_ok(NULL);
+}
+
+#define CBC_OLD_MSG_THRESHOLD 2
+void retransmit_old_with_missing_acks(cbcast_t *cbc) {
+  if (!cbc) {
+    return (void)RESULT_UNREACHABLE;
+  }
+
+  if (arrlen(cbc->sent_msg_buffer) == 0 || arrlen(cbc->peers) == 0) {
+    return;
+  }
+
+  uint16_t current_clock = get_current_clock(cbc);
+
+  cbcast_sent_msg_t **old_msgs = find_old_messages(cbc, current_clock);
+  if (!old_msgs || arrlen(old_msgs) == 0) {
+    return;
+  }
+
+  retransmit_messages(cbc, old_msgs);
+}
+
+uint16_t get_current_clock(cbcast_t *cbc) {
+  pthread_mutex_lock(&cbc->vclock->mtx);
+  uint16_t current_clock = cbc->vclock->clock[cbc->pid];
+  pthread_mutex_unlock(&cbc->vclock->mtx);
+  return current_clock;
+}
+
+cbcast_sent_msg_t **find_old_messages(cbcast_t *cbc, uint16_t current_clock) {
+  cbcast_sent_msg_t **old_msgs = NULL;
+
+  pthread_mutex_lock(&cbc->send_lock);
+  for (size_t i = 0; i < (size_t)arrlen(cbc->sent_msg_buffer); i++) {
+    cbcast_sent_msg_t *sent_msg = cbc->sent_msg_buffer[i];
+    uint16_t msg_age = current_clock - sent_msg->message->header->clock;
+
+    if (msg_age >= CBC_OLD_MSG_THRESHOLD &&
+        sent_msg->ack_bitmap != sent_msg->ack_target) {
+      arrput(old_msgs, sent_msg);
+    }
+  }
+  pthread_mutex_unlock(&cbc->send_lock);
+
+  return old_msgs;
+}
+
+void retransmit_messages(cbcast_t *cbc, cbcast_sent_msg_t **old_msgs) {
+  while (arrlen(old_msgs) > 0) {
+    cbcast_sent_msg_t *old_sent = arrpop(old_msgs);
+    if (!old_sent) {
+      continue;
+    }
+
+    uint64_t *target_peers = find_unacked_peers(cbc, old_sent);
+
+    if (!target_peers || arrlen(target_peers) == 0) {
+      return (void)RESULT_UNREACHABLE;
+    }
+
+    queue_retransmit_messages(cbc, old_sent, target_peers);
+  }
+
+  arrfree(old_msgs);
+}
+
+uint64_t *find_unacked_peers(cbcast_t *cbc, cbcast_sent_msg_t *old_sent) {
+  uint64_t *target_peers = NULL;
+
+  pthread_mutex_lock(&cbc->peer_lock);
+  for (size_t j = 0; j < (size_t)arrlen(cbc->peers); j++) {
+    if (old_sent->ack_bitmap & (1 << cbc->peers[j]->pid)) {
+      arrput(target_peers, cbc->peers[j]->pid);
+    }
+  }
+  pthread_mutex_unlock(&cbc->peer_lock);
+
+  return target_peers;
+}
+
+void queue_retransmit_messages(cbcast_t *cbc, cbcast_sent_msg_t *old_sent,
+                               uint64_t *target_peers) {
+  for (size_t j = 0; j < (size_t)arrlen(target_peers); j++) {
+    struct sockaddr_in *addr = cbc_peer_get_addr_copy(cbc, target_peers[j]);
+
+    cbcast_msg_t *dup_msg =
+        result_expect(cbc_msg_create(CBC_RETRANSMIT, old_sent->message->payload,
+                                     old_sent->message->header->len),
+                      "[retransmit_old_with_missing_acks] Failed to create "
+                      "retransmit message - out of memory");
+
+    cbcast_outgoing_msg_t *outgoing =
+        result_expect(cbc_outgoing_msg_create(dup_msg, addr),
+                      "[retransmit_old_with_missing_acks] Failed to create "
+                      "outgoing message - out of memory");
+
+    printf("[retransmit_old_with_missing_acks] Retransmitting message: %d to "
+           "peer %lu\n",
+           outgoing->message->header->clock, cbc->peers[j]->pid);
+
+    outgoing->socket_flags = 0;
+
+    pthread_mutex_lock(&cbc->send_lock);
+    arrput(cbc->send_queue, outgoing);
+    pthread_mutex_unlock(&cbc->send_lock);
+  }
+
+  arrfree(target_peers);
 }
 
 // @brief Broadcasts a message to all peers in the network.
@@ -59,7 +177,7 @@ uint64_t broadcast(cbcast_t *cbc, const char *msg_bytes, const size_t msg_size,
   pthread_mutex_lock(&cbc->peer_lock);
   {
     for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
-      struct sockaddr_in *addr = cbc->peers[i]->addr;
+      ack_target |= 1 << cbc->peers[i]->pid;
 
 #ifdef NETWORK_SIMULATION
 #ifdef NETWORK_SIMULATION_DROP
@@ -72,19 +190,18 @@ uint64_t broadcast(cbcast_t *cbc, const char *msg_bytes, const size_t msg_size,
         printf("[broadcast] cbc pid %lu dropping message type %d clock %hu to "
                "peer %lu\n",
                cbc->pid, kind, msg_clock, cbc->peers[i]->pid);
-      } else {
-        sendto(cbc->socket_fd, msg_bytes, msg_size, flags,
-               (struct sockaddr *)addr, sizeof(*addr));
+
+        continue;
       }
-      ack_target |= 1 << cbc->peers[i]->pid;
 #endif
-#else
+#endif
+
+      struct sockaddr_in *addr = cbc->peers[i]->addr;
       sendto(cbc->socket_fd, msg_bytes, msg_size, flags,
              (struct sockaddr *)addr, sizeof(*addr));
-      ack_target |= 1 << cbc->peers[i]->pid;
-#endif
     }
   }
+
   pthread_mutex_unlock(&cbc->peer_lock);
   return ack_target;
 }
@@ -131,12 +248,23 @@ void *cbc_send_thread(void *arg) {
     case CBC_ACK:
     case CBC_RETRANSMIT_REQ:
     case CBC_RETRANSMIT:
+
+#ifdef NETWORK_SIMULATION
+#ifdef NETWORK_SIMULATION_DROP
+      if (rand() % 100 < NETWORK_SIMULATION_DROP) {
+        printf("[cbc_send_thread] cbc pid %lu dropping message type %d\n",
+               cbc->pid, outgoing->message->header->kind);
+        break;
+      }
+#endif
+#endif
+
       sendto(cbc->socket_fd, msg_bytes, msg_size, outgoing->socket_flags,
              (struct sockaddr *)outgoing->addr, sizeof(*outgoing->addr));
       break;
 
     case CBC_HEARTBEAT:
-      return RESULT_UNREACHABLE;
+      return RESULT_UNIMPLEMENTED;
       break;
     }
 
