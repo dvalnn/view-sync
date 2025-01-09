@@ -180,6 +180,12 @@ uint64_t broadcast(cbcast_t *cbc, const char *msg_bytes, const size_t msg_size,
                    int flags) {
 
   uint64_t ack_target = 0;
+
+#ifdef STATISTICS
+  uint64_t n_dropped = 0;
+  uint64_t n_sent = 0;
+#endif
+
   pthread_mutex_lock(&cbc->peer_lock);
   {
     for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
@@ -196,7 +202,9 @@ uint64_t broadcast(cbcast_t *cbc, const char *msg_bytes, const size_t msg_size,
         printf("[broadcast] cbc pid %lu dropping message type %d clock %hu to "
                "peer %lu\n",
                cbc->pid, kind, msg_clock, cbc->peers[i]->pid);
-
+#ifdef STATISTICS
+        n_dropped++;
+#endif
         continue;
       }
 #endif
@@ -205,10 +213,20 @@ uint64_t broadcast(cbcast_t *cbc, const char *msg_bytes, const size_t msg_size,
       struct sockaddr_in *addr = cbc->peers[i]->addr;
       sendto(cbc->socket_fd, msg_bytes, msg_size, flags,
              (struct sockaddr *)addr, sizeof(*addr));
+#ifdef STATISTICS
+      n_sent++;
+#endif
     }
   }
-
   pthread_mutex_unlock(&cbc->peer_lock);
+
+#ifdef STATISTICS
+  pthread_mutex_lock(&cbc->stats_lock);
+  cbc->stats->sent_msg_count += n_sent;
+  cbc->stats->dropped_msg_count += n_dropped;
+  pthread_mutex_unlock(&cbc->stats_lock);
+#endif
+
   return ack_target;
 }
 
@@ -236,6 +254,19 @@ void *cbc_send_thread(void *arg) {
     size_t msg_size = 0;
     char *msg_bytes = cbc_msg_serialize(outgoing->message, &msg_size);
 
+#ifdef NETWORK_SIMULATION
+#ifdef NETWORK_SIMULATION_DROP
+    bool will_drop = false;
+
+    if (rand() % 100 < NETWORK_SIMULATION_DROP) {
+      printf("[cbc_send_thread] cbc pid %lu dropping message type %d\n",
+             cbc->pid, outgoing->message->header->kind);
+
+      will_drop = true;
+    }
+#endif
+#endif
+
     switch (outgoing->message->header->kind) {
     case CBC_DATA:
       uint64_t ack_target = broadcast(cbc, msg_bytes, msg_size, 0);
@@ -252,16 +283,71 @@ void *cbc_send_thread(void *arg) {
       break;
 
     case CBC_ACK:
-    case CBC_RETRANSMIT_REQ:
-    case CBC_RETRANSMIT:
-
 #ifdef NETWORK_SIMULATION
 #ifdef NETWORK_SIMULATION_DROP
-      if (rand() % 100 < NETWORK_SIMULATION_DROP) {
-        printf("[cbc_send_thread] cbc pid %lu dropping message type %d\n",
-               cbc->pid, outgoing->message->header->kind);
+
+      if (will_drop) {
+#ifdef STATISTICS
+        pthread_mutex_lock(&cbc->stats_lock);
+        cbc->stats->dropped_ack_count++;
+        pthread_mutex_unlock(&cbc->stats_lock);
+#endif
         break;
       }
+
+#ifdef STATISTICS
+      pthread_mutex_lock(&cbc->stats_lock);
+      cbc->stats->sent_ack_count++;
+      pthread_mutex_unlock(&cbc->stats_lock);
+#endif
+
+      goto send;
+#endif
+#endif
+
+    case CBC_RETRANSMIT_REQ:
+#ifdef NETWORK_SIMULATION
+#ifdef NETWORK_SIMULATION_DROP
+
+      if (will_drop) {
+#ifdef STATISTICS
+        pthread_mutex_lock(&cbc->stats_lock);
+        cbc->stats->dropped_retransmit_req_count++;
+        pthread_mutex_unlock(&cbc->stats_lock);
+#endif
+        break;
+      }
+
+#ifdef STATISTICS
+      pthread_mutex_lock(&cbc->stats_lock);
+      cbc->stats->sent_retransmit_req_count++;
+      pthread_mutex_unlock(&cbc->stats_lock);
+#endif
+
+      goto send;
+#endif
+#endif
+
+    case CBC_RETRANSMIT:
+#ifdef NETWORK_SIMULATION
+#ifdef NETWORK_SIMULATION_DROP
+
+      if (will_drop) {
+#ifdef STATISTICS
+        pthread_mutex_lock(&cbc->stats_lock);
+        cbc->stats->dropped_ack_count++;
+        pthread_mutex_unlock(&cbc->stats_lock);
+#endif
+        break;
+      }
+
+#ifdef STATISTICS
+      pthread_mutex_lock(&cbc->stats_lock);
+      cbc->stats->sent_ack_count++;
+      pthread_mutex_unlock(&cbc->stats_lock);
+#endif
+
+    send:
 #endif
 #endif
 

@@ -60,15 +60,18 @@ struct CBcastSentMessage {
 typedef struct CBcastSentMessage cbcast_sent_msg_t;
 
 struct CBcastStats {
-  uint64_t sent_msg_count;
   uint64_t recv_msg_count;
-  uint64_t ack_msg_count;
-  uint64_t retransmit_req_count;
-  uint64_t retransmit_count;
 
+  uint64_t sent_msg_count;
   uint64_t dropped_msg_count;
+
+  uint64_t sent_ack_count;
   uint64_t dropped_ack_count;
+
+  uint64_t sent_retransmit_req_count;
   uint64_t dropped_retransmit_req_count;
+
+  uint64_t sent_retransmit_count;
   uint64_t dropped_retransmit_count;
 
   uint64_t delivered_msg_count;
@@ -159,7 +162,7 @@ Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len);
 void *cbc_send_thread(void *arg);
 
 #ifdef STATISTICS
-void cbc_collect_statistics(cbcast_t *cbc);
+char *cbc_collect_statistics(cbcast_t *cbc);
 #endif
 
 #endif

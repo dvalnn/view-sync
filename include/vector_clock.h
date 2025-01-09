@@ -15,4 +15,5 @@ typedef struct VectorClock vector_clock_t;
 
 Result *vc_init(const uint64_t size);
 void vc_free(vector_clock_t *vc);
+uint64_t *vc_snapshot(vector_clock_t *vc);
 #endif

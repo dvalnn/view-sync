@@ -27,7 +27,7 @@
         # add library dependencies here i.e.
         #zlib
         cmocka
-        json_c
+        cjson
         # Tipp: you can use `nix-locate foo.h` to find the package that provides a header file, see https://github.com/nix-community/nix-index
       ];
       nativeBuildInputs = with pkgs; [

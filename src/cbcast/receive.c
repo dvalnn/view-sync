@@ -46,6 +46,14 @@ cbcast_received_msg_t *cbc_receive(cbcast_t *cbc) {
 
   pthread_mutex_unlock(&cbc->recv_lock);
 
+#ifdef STATISTICS
+  if (msg) {
+    pthread_mutex_lock(&cbc->stats_lock);
+    cbc->stats->delivered_msg_count++;
+    pthread_mutex_unlock(&cbc->stats_lock);
+  }
+#endif
+
   return msg;
 }
 

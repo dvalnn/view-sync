@@ -21,6 +21,7 @@ void sigint_handler(int sig) {
   (void)sig;
   running = 0;
 }
+
 void worker_process(cbcast_t *cbc, volatile int *sync_state) {
   printf("Worker %lu starting (PID: %d)\n", cbc->pid, getpid());
 
@@ -47,6 +48,12 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
   int received_counter = 0;
   static int counter = 0;
 
+  char *log_file = NULL;
+  if (asprintf(&log_file, "worker_%lu.log", cbc->pid) < 0) {
+    perror("asprintf");
+    exit(EXIT_FAILURE);
+  }
+
   while (running) {
     cbcast_received_msg_t *received_msg = cbc_receive(cbc);
     if (received_msg) {
@@ -63,8 +70,25 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
                     "[main] Failed to broadcast message");
     }
 
+    char *stats = cbc_collect_statistics(cbc);
+
+    if (!stats) {
+      fprintf(stderr, "Failed to collect statistics\n");
+      exit(EXIT_FAILURE);
+    }
+
+    FILE *log = fopen(log_file, "a");
+    if (log) {
+      fprintf(log, "Worker %lu stats: %s\n", cbc->pid, stats);
+      fclose(log);
+    }
+
+    free(stats);
+
     usleep(250000); // Simulate processing delay
   }
+
+  free(log_file);
 
   // Step 3: Wait for turn to print state
   while ((uint64_t)sync_state[NUM_WORKERS] != cbc->pid) {
