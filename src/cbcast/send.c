@@ -107,6 +107,10 @@ void retransmit_messages(cbcast_t *cbc, cbcast_sent_msg_t **old_msgs) {
       continue;
     }
 
+    printf("[retransmit_old_with_missing_acks] cbc pid %lu old message clock "
+           "%d ack state %lu\n",
+           cbc->pid, old_sent->message->header->clock, old_sent->ack_bitmap);
+
     uint64_t *target_peers = find_unacked_peers(cbc, old_sent);
 
     if (!target_peers || arrlen(target_peers) == 0) {
@@ -125,8 +129,9 @@ uint64_t *find_unacked_peers(cbcast_t *cbc, cbcast_sent_msg_t *old_sent) {
   pthread_mutex_lock(&cbc->peer_lock);
   for (size_t j = 0; j < (size_t)arrlen(cbc->peers); j++) {
     if (old_sent->ack_bitmap & (1 << cbc->peers[j]->pid)) {
-      arrput(target_peers, cbc->peers[j]->pid);
+      continue;
     }
+    arrput(target_peers, cbc->peers[j]->pid);
   }
   pthread_mutex_unlock(&cbc->peer_lock);
 
@@ -149,11 +154,12 @@ void queue_retransmit_messages(cbcast_t *cbc, cbcast_sent_msg_t *old_sent,
                       "[retransmit_old_with_missing_acks] Failed to create "
                       "outgoing message - out of memory");
 
-    printf("[retransmit_old_with_missing_acks] Retransmitting message: %d to "
-           "peer %lu\n",
-           outgoing->message->header->clock, cbc->peers[j]->pid);
+    printf("[retransmit_old_with_missing_acks] cbc pid %lu retransmitting "
+           "message clock %d to peer %lu\n",
+           cbc->pid, outgoing->message->header->clock, cbc->peers[j]->pid);
 
     outgoing->socket_flags = 0;
+    outgoing->message->header->clock = old_sent->message->header->clock;
 
     pthread_mutex_lock(&cbc->send_lock);
     arrput(cbc->send_queue, outgoing);

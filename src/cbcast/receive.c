@@ -252,6 +252,7 @@ void handle_data_msg(cbcast_t *cbc, cbcast_msg_t *msg, uint16_t sender_pid) {
   switch (causality) {
   case CAUSALITY_ERROR:
     if (msg->header->kind == CBC_RETRANSMIT) {
+      ack_received_message(cbc, msg->header->clock, sender_pid);
       cbc_received_msg_free(rcvd);
       return;
     }
