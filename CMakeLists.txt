@@ -40,7 +40,9 @@ set(TEST_FILES
 # ----- Project compilation ----- # 
 add_executable(${PROJECT_NAME} main.c ${SRC_FILES})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE cjson)
+find_package(CURL REQUIRED)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE cjson CURL::libcurl)
 target_link_options(${PROJECT_NAME} PRIVATE -Wl,--wrap=cbc_send_to_peer)
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror)
 

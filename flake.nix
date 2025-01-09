@@ -10,25 +10,23 @@
     };
   };
 
-  outputs =
-    { self
-    , nixpkgs
-    , flake-utils
-    , ...
-    }:
-    # For more information about the C/C++ infrastructure in nixpkgs: https://nixos.wiki/wiki/C
-    flake-utils.lib.eachDefaultSystem (system:
-    let
+  outputs = {
+    self,
+    nixpkgs,
+    flake-utils,
+    ...
+  }:
+  # For more information about the C/C++ infrastructure in nixpkgs: https://nixos.wiki/wiki/C
+    flake-utils.lib.eachDefaultSystem (system: let
       pkgs = nixpkgs.legacyPackages.${system};
-      pname = "view-sync"; #package name
-      version = "0.0.1";
-      src = ./.;
+
       buildInputs = with pkgs; [
         # add library dependencies here i.e.
         #zlib
         cmocka
         cjson
         # Tipp: you can use `nix-locate foo.h` to find the package that provides a header file, see https://github.com/nix-community/nix-index
+        curl.dev
       ];
       nativeBuildInputs = with pkgs; [
         man-pages
@@ -37,8 +35,7 @@
         pkg-config
         clang-tools
       ];
-    in
-    {
+    in {
       devShells.default = pkgs.mkShell {
         inherit buildInputs nativeBuildInputs;
 
@@ -46,10 +43,6 @@
         #NIX_CFLAGS_COMPILE = "-g";
         # You can use NIX_LDFLAGS to set the default linker flags for the shell
         #NIX_LDFLAGS = "-L${lib.getLib zstd}/lib -lzstd";
-      };
-
-      packages.default = pkgs.stdenv.mkDerivation {
-        inherit buildInputs nativeBuildInputs pname version src;
       };
     });
 }

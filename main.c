@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <curl/curl.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
@@ -20,6 +21,54 @@ static volatile int running = 1;
 void sigint_handler(int sig) {
   (void)sig;
   running = 0;
+}
+
+#define PROMTAIL_URL                                                           \
+  "http://localhost:9080/loki/api/v1/push" // Promtail HTTP endpoint
+
+void send_stats_to_promtail(const char *json_payload) {
+  CURL *curl = curl_easy_init();
+  if (curl) {
+    // Create the payload in Loki's log entry format
+    char payload_template[] =
+        "{"
+        "  \"streams\": ["
+        "    {"
+        "      \"labels\": \"{job=\\\"cbcast\\\", app=\\\"cbcast_stats\\\"}\","
+        "      \"entries\": ["
+        "        {"
+        "          \"ts\": \"%ld000000\","
+        "          \"line\": \"%s\""
+        "        }"
+        "      ]"
+        "    }"
+        "  ]"
+        "}";
+
+    // Get the current timestamp in milliseconds
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    long timestamp_ms = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+
+    // Format the payload
+    char formatted_payload[8192];
+    snprintf(formatted_payload, sizeof(formatted_payload), payload_template,
+             timestamp_ms, json_payload);
+
+    // Set CURL options for sending to Promtail
+    curl_easy_setopt(curl, CURLOPT_URL, PROMTAIL_URL);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, formatted_payload);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER,
+                     curl_slist_append(NULL, "Content-Type: application/json"));
+
+    // Perform the HTTP request
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+      fprintf(stderr, "curl_easy_perform() failed: %s\n",
+              curl_easy_strerror(res));
+    }
+    curl_easy_cleanup(curl);
+  }
 }
 
 void worker_process(cbcast_t *cbc, volatile int *sync_state) {
@@ -72,6 +121,8 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
 
     char *stats = cbc_collect_statistics(cbc);
 
+    send_stats_to_pushgateway(stats);
+
     if (!stats) {
       fprintf(stderr, "Failed to collect statistics\n");
       exit(EXIT_FAILURE);
@@ -79,7 +130,7 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
 
     FILE *log = fopen(log_file, "a");
     if (log) {
-      fprintf(log, "Worker %lu stats: %s\n", cbc->pid, stats);
+      fprintf(log, "%s\n", stats);
       fclose(log);
     }
 
