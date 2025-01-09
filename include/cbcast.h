@@ -12,19 +12,17 @@
 #include "result.h"
 #include "vector_clock.h"
 
-#ifndef CBC_Q_LEN
-#define CBC_Q_LEN 20
-#endif
-
 #define NETWORK_SIMULATION
 #define NETWORK_SIMULATION_DROP 10
+
+#define STATISTICS
 
 enum CBcastMessageType {
   CBC_DATA = 1,
   CBC_ACK,
   CBC_RETRANSMIT_REQ,
   CBC_RETRANSMIT,
-  CBC_HEARTBEAT,
+  CBC_HEARTBEAT, // UNUSED
 };
 typedef enum CBcastMessageType cbcast_msg_kind_t;
 
@@ -61,6 +59,33 @@ struct CBcastSentMessage {
 };
 typedef struct CBcastSentMessage cbcast_sent_msg_t;
 
+struct CBcastStats {
+  uint64_t sent_msg_count;
+  uint64_t recv_msg_count;
+  uint64_t ack_msg_count;
+  uint64_t retransmit_req_count;
+  uint64_t retransmit_count;
+
+  uint64_t dropped_msg_count;
+  uint64_t dropped_ack_count;
+  uint64_t dropped_retransmit_req_count;
+  uint64_t dropped_retransmit_count;
+
+  uint64_t delivered_msg_count;
+  uint64_t delivery_queue_size;
+  uint64_t delivery_queue_max_size;
+
+  uint64_t sent_msg_buffer_size;
+  uint64_t sent_msg_buffer_max_size;
+
+  uint64_t held_msg_buffer_size;
+  uint64_t held_msg_buffer_max_size;
+
+  uint64_t *vector_clock_snapshot;
+  uint64_t num_peers;
+};
+typedef struct CBcastStats cbcast_stats_t;
+
 struct CBcast {
   int socket_fd;
   uint64_t pid;
@@ -84,7 +109,13 @@ struct CBcast {
   pthread_mutex_t recv_lock;
   cbcast_received_msg_t **held_msg_buffer;
   cbcast_received_msg_t **delivery_queue;
+
+#ifdef STATISTICS
+  pthread_mutex_t stats_lock;
+  cbcast_stats_t *stats;
+#endif
 };
+
 typedef struct CBcast cbcast_t;
 typedef struct CBCPeer cbcast_peer_t;
 
@@ -126,5 +157,9 @@ void *cbc_recv_thread(void *arg);
 // send.c
 Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len);
 void *cbc_send_thread(void *arg);
+
+#ifdef STATISTICS
+void cbc_collect_statistics(cbcast_t *cbc);
+#endif
 
 #endif

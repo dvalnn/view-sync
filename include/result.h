@@ -86,5 +86,6 @@ inline bool result_is_err(Result *r) { return !r->_is_ok; }
 
 #define RESULT_UNIMPLEMENTED result_unwrap(result_new_err("Unimplemented"))
 #define RESULT_UNREACHABLE result_unwrap(result_new_err("Unreachable"))
+#define RESULT_OOM result_unwrap(result_new_err("Memory allocation failed"))
 
 #endif

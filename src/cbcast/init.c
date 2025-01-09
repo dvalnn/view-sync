@@ -16,8 +16,16 @@ Result *cbc_init(uint64_t pid, uint64_t max_p, uint16_t port) {
   // Allocate memory for the cbcast_t struct
   cbcast_t *cbc = calloc(1, sizeof(cbcast_t));
   if (!cbc) {
-    return result_new_err("[cbc_init] malloc failed");
+    return result_new_err("[cbc_init] failed to malloc cbcast_t");
   }
+
+#ifdef STATISTICS
+  cbc->stats = calloc(1, sizeof(cbcast_stats_t));
+  if (!cbc->stats) {
+    cbc_free(cbc);
+    return result_new_err("[cbc_init] failed to malloc stats");
+  }
+#endif
 
   cbc->pid = pid;
   cbc->vclock =
@@ -79,6 +87,12 @@ Result *cbc_init(uint64_t pid, uint64_t max_p, uint16_t port) {
     pthread_mutexattr_init(&recv_lock_attr);
     pthread_mutex_init(&cbc->recv_lock, &recv_lock_attr);
   }
+
+#ifdef STATISTICS
+  pthread_mutexattr_t stats_lock_attr;
+  pthread_mutexattr_init(&stats_lock_attr);
+  pthread_mutex_init(&cbc->stats_lock, &stats_lock_attr);
+#endif
 
   return result_new_ok(cbc);
 }
@@ -161,6 +175,16 @@ void cbc_free(cbcast_t *cbc) {
   if (cbc->socket_fd >= 0) {
     close(cbc->socket_fd);
   }
+
+#ifdef STATISTICS
+  if (cbc->stats) {
+    if (cbc->stats->vector_clock_snapshot)
+      free(cbc->stats->vector_clock_snapshot);
+
+    free(cbc->stats);
+  }
+  pthread_mutex_destroy(&cbc->stats_lock);
+#endif
 
   // Destroy locks
   pthread_mutex_destroy(&cbc->send_lock);
