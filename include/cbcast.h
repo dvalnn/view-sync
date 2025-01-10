@@ -163,6 +163,7 @@ void *cbc_send_thread(void *arg);
 
 #ifdef STATISTICS
 char *cbc_collect_statistics(cbcast_t *cbc);
+void send_stats_to_loki(const char *json_payload, const char *loki_url);
 #endif
 
 #endif
