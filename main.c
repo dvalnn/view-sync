@@ -58,6 +58,14 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
     exit(EXIT_FAILURE);
   }
 
+  {
+    FILE *log = fopen(log_file, "a");
+    if (log) {
+      fprintf(log, "[");
+      fclose(log);
+    }
+  }
+
   while (running) {
     cbcast_received_msg_t *received_msg = cbc_receive(cbc);
     if (received_msg) {
@@ -74,9 +82,7 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
                     "[main] Failed to broadcast message");
     }
 
-    char *stats = cbc_collect_statistics(cbc);
-
-    send_stats_to_loki(stats, LOKI_URL);
+    cJSON *stats = cbc_collect_statistics(cbc);
 
     if (!stats) {
       fprintf(stderr, "Failed to collect statistics\n");
@@ -85,13 +91,31 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
 
     FILE *log = fopen(log_file, "a");
     if (log) {
-      fprintf(log, "%s\n", stats);
+      char *log_str = cJSON_PrintUnformatted(stats);
+      fprintf(log, "\n%s,", log_str);
+      free(log_str);
       fclose(log);
     }
 
-    free(stats);
+    cJSON *loki_log = create_loki_log(stats);
+    char *loki_log_str = cJSON_PrintUnformatted(loki_log);
+    send_stats_to_loki(loki_log_str, LOKI_URL);
+
+    free(loki_log_str);
+
+    cJSON_Delete(stats);
+    cJSON_Delete(loki_log);
 
     usleep(250000); // Simulate processing delay
+  }
+
+  {
+    FILE *log = fopen(log_file, "a");
+    if (log) {
+      fseek(log, -1, SEEK_END);
+      fprintf(log, "\n]");
+      fclose(log);
+    }
   }
 
   free(log_file);

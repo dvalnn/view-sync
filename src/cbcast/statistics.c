@@ -18,37 +18,8 @@ char *get_current_timestamp_ns() {
   return timestamp;
 }
 
-// Serialize statistics to JSON format compatible with Loki
-char *serialize_statistics_to_loki_json(const uint64_t id,
-                                        const cbcast_stats_t *stats) {
-  // Get the current timestamp
-  char *timestamp_ns = get_current_timestamp_ns();
-  if (!timestamp_ns) {
-    fprintf(stderr, "Failed to allocate memory for timestamp.\n");
-    return NULL;
-  }
-
-  // Create the JSON payload for Loki
-  cJSON *root = cJSON_CreateObject();
-  cJSON *streams = cJSON_AddArrayToObject(root, "streams");
-  cJSON *stream = cJSON_CreateObject();
-  cJSON *stream_labels = cJSON_CreateObject();
-  cJSON *values = cJSON_CreateArray();
-
-  // Set labels
-  cJSON_AddStringToObject(stream_labels, "label", "cbcast_logs");
-  cJSON_AddStringToObject(stream_labels, "host", "localhost");
-  cJSON_AddStringToObject(stream_labels, "application", "cbc");
-  cJSON_AddStringToObject(stream_labels, "level", "info");
-
-  // Add labels to the stream
-  cJSON_AddItemToObject(stream, "stream", stream_labels);
-
-  // Serialize statistics as a log line
-  cJSON *log_entry = cJSON_CreateArray();
-  cJSON_AddItemToArray(log_entry, cJSON_CreateString(timestamp_ns));
-  free(timestamp_ns);
-
+cJSON *serialize_statistics_to_json(const uint64_t id,
+                                    const cbcast_stats_t *stats) {
   cJSON *log_message = cJSON_CreateObject();
   cJSON_AddNumberToObject(log_message, "worker", id);
   cJSON_AddNumberToObject(log_message, "recv_msg_count", stats->recv_msg_count);
@@ -88,6 +59,39 @@ char *serialize_statistics_to_loki_json(const uint64_t id,
   }
   cJSON_AddItemToObject(log_message, "vector_clock_snapshot", vector_clock);
 
+  return log_message;
+}
+
+// Serialize statistics to JSON format compatible with Loki
+cJSON *create_loki_log(cJSON *log_message) {
+  // Get the current timestamp
+  char *timestamp_ns = get_current_timestamp_ns();
+  if (!timestamp_ns) {
+    fprintf(stderr, "Failed to allocate memory for timestamp.\n");
+    return NULL;
+  }
+
+  // Create the JSON payload for Loki
+  cJSON *root = cJSON_CreateObject();
+  cJSON *streams = cJSON_AddArrayToObject(root, "streams");
+  cJSON *stream = cJSON_CreateObject();
+  cJSON *stream_labels = cJSON_CreateObject();
+  cJSON *values = cJSON_CreateArray();
+
+  // Set labels
+  cJSON_AddStringToObject(stream_labels, "label", "cbcast_logs");
+  cJSON_AddStringToObject(stream_labels, "host", "localhost");
+  cJSON_AddStringToObject(stream_labels, "application", "cbc");
+  cJSON_AddStringToObject(stream_labels, "level", "info");
+
+  // Add labels to the stream
+  cJSON_AddItemToObject(stream, "stream", stream_labels);
+
+  // Serialize statistics as a log line
+  cJSON *log_entry = cJSON_CreateArray();
+  cJSON_AddItemToArray(log_entry, cJSON_CreateString(timestamp_ns));
+  free(timestamp_ns);
+
   char *log_message_str = cJSON_PrintUnformatted(log_message);
   cJSON_AddItemToArray(log_entry, cJSON_CreateString(log_message_str));
   cJSON_AddItemToArray(values, log_entry);
@@ -96,13 +100,10 @@ char *serialize_statistics_to_loki_json(const uint64_t id,
   cJSON_AddItemToObject(stream, "values", values);
   cJSON_AddItemToArray(streams, stream);
 
-  char *payload = cJSON_PrintUnformatted(root);
-  cJSON_Delete(root);
-
-  return payload;
+  return root;
 }
 
-char *cbc_collect_statistics(cbcast_t *cbc) {
+cJSON *cbc_collect_statistics(cbcast_t *cbc) {
   pthread_mutex_lock(&cbc->send_lock);
   size_t sent_buffer_size = arrlen(cbc->sent_msg_buffer);
   pthread_mutex_unlock(&cbc->send_lock);
@@ -135,14 +136,14 @@ char *cbc_collect_statistics(cbcast_t *cbc) {
   // TODO: fix this
   cbc->stats->num_peers = 4;
 
-  char *json = serialize_statistics_to_loki_json(cbc->pid, cbc->stats);
+  cJSON *json = serialize_statistics_to_json(cbc->pid, cbc->stats);
   pthread_mutex_unlock(&cbc->stats_lock);
 
   return json;
 }
 
 // Send the log payload to Grafana Loki
-void send_stats_to_loki(const char *json_payload, const char *loki_url) {
+void send_stats_to_loki(char *json_payload, const char *loki_url) {
   CURL *curl = curl_easy_init();
   if (curl) {
     struct curl_slist *headers = NULL;

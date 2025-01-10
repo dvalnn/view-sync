@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <threads.h>
 
+#include "cjson/cJSON.h"
 #include "result.h"
 #include "vector_clock.h"
 
@@ -162,8 +163,9 @@ Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len);
 void *cbc_send_thread(void *arg);
 
 #ifdef STATISTICS
-char *cbc_collect_statistics(cbcast_t *cbc);
-void send_stats_to_loki(const char *json_payload, const char *loki_url);
+cJSON *cbc_collect_statistics(cbcast_t *cbc);
+cJSON *create_loki_log(cJSON *log_message);
+void send_stats_to_loki(char *json_payload, const char *loki_url);
 #endif
 
 #endif
