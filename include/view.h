@@ -8,8 +8,8 @@
 #include "result.h"
 
 struct View {
-  uint16_t id;
-  uint16_t *gm_ids;
+  uint64_t id;
+  uint64_t *gm_ids;
 };
 typedef struct View view_t;
 
@@ -20,7 +20,7 @@ enum ViewAct {
 typedef enum ViewAct view_act_t;
 
 struct ViewChange {
-  uint16_t gm_id;
+  uint64_t gm_id;
   view_act_t action;
 };
 typedef struct ViewChange view_change_t;
@@ -36,7 +36,7 @@ typedef struct ViewChange view_change_t;
  * @return A `Result` containing a pointer to the new view if successful,
  *         or an error message if initialization fails.
  */
-Result *view_init(uint16_t *gm_ids, size_t n_ids);
+Result *view_init(uint64_t *gm_ids, size_t n_ids);
 
 /**
  * @brief Frees the memory associated with a view.

@@ -10,13 +10,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void retransmit_old_with_missing_acks(cbcast_t *cbc);
+void handle_old_messages(cbcast_t *cbc);
 uint16_t get_current_clock(cbcast_t *cbc);
 cbcast_sent_msg_t **find_old_messages(cbcast_t *cbc, uint16_t current_clock);
 void retransmit_messages(cbcast_t *cbc, cbcast_sent_msg_t **old_msgs);
 uint64_t *find_unacked_peers(cbcast_t *cbc, cbcast_sent_msg_t *old_sent);
 void queue_retransmit_messages(cbcast_t *cbc, cbcast_sent_msg_t *old_sent,
                                uint64_t *target_peers);
+cbcast_sent_msg_t **filter_dead_messages(uint64_t current_clock,
+                                         cbcast_sent_msg_t **old_msgs);
 
 Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len) {
   if (!cbc || !payload || !payload_len) {
@@ -48,15 +50,52 @@ Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len) {
   arrput(cbc->send_queue, outgoing);
   pthread_mutex_unlock(&cbc->send_lock);
 
-  retransmit_old_with_missing_acks(cbc);
+  handle_old_messages(cbc);
 
   pthread_cond_signal(&cbc->send_cond);
 
   return result_new_ok(NULL);
 }
 
+int arrfind(uint64_t *arr, uint64_t fd) {
+  for (int i = 0; i < arrlen(arr); i++) {
+    if (arr[i] == fd) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+uint64_t *find_dead_peers(cbcast_t *cbc, cbcast_sent_msg_t **dead_msgs) {
+  uint64_t *dead_peers = NULL;
+  for (size_t i = 0; i < (size_t)arrlen(dead_msgs); i++) {
+    cbcast_sent_msg_t *old_sent = dead_msgs[i];
+    uint64_t *target_peers = find_unacked_peers(cbc, old_sent);
+
+    if (!target_peers || arrlen(target_peers) == 0) {
+      return RESULT_UNREACHABLE;
+    }
+
+    for (size_t j = 0; j < (size_t)arrlen(target_peers); j++) {
+      if (arrfind(dead_peers, target_peers[j]) == -1) {
+        arrput(dead_peers, target_peers[j]);
+      }
+    }
+  }
+
+  return dead_peers;
+}
+
+void handle_dead_peers(cbcast_t *cbc, uint64_t *dead_peers) {
+  (void)cbc;
+  (void)dead_peers;
+  return (void)RESULT_UNIMPLEMENTED;
+}
+
 #define CBC_OLD_MSG_THRESHOLD 2
-void retransmit_old_with_missing_acks(cbcast_t *cbc) {
+#define CBC_DEAD_MSG_THRESHOLD 6
+void handle_old_messages(cbcast_t *cbc) {
   if (!cbc) {
     return (void)RESULT_UNREACHABLE;
   }
@@ -66,12 +105,19 @@ void retransmit_old_with_missing_acks(cbcast_t *cbc) {
   }
 
   uint16_t current_clock = get_current_clock(cbc);
-
   cbcast_sent_msg_t **old_msgs = find_old_messages(cbc, current_clock);
   if (!old_msgs || arrlen(old_msgs) == 0) {
     return;
   }
 
+  cbcast_sent_msg_t **dead_msgs = filter_dead_messages(current_clock, old_msgs);
+  uint64_t *dead_peers = find_dead_peers(cbc, dead_msgs);
+  arrfree(dead_msgs);
+
+  if (arrlen(dead_peers) > 0) {
+    handle_dead_peers(cbc, dead_peers);
+    arrfree(dead_peers);
+  }
   retransmit_messages(cbc, old_msgs);
 }
 
@@ -80,6 +126,23 @@ uint16_t get_current_clock(cbcast_t *cbc) {
   uint16_t current_clock = cbc->vclock->clock[cbc->pid];
   pthread_mutex_unlock(&cbc->vclock->mtx);
   return current_clock;
+}
+
+cbcast_sent_msg_t **filter_dead_messages(uint64_t current_clock,
+                                         cbcast_sent_msg_t **old_msgs) {
+  cbcast_sent_msg_t **dead_msgs = NULL;
+
+  for (size_t i = 0; i < (size_t)arrlen(old_msgs); i++) {
+    cbcast_sent_msg_t *old_sent = old_msgs[i];
+    uint16_t msg_age = current_clock - old_sent->message->header->clock;
+
+    if (msg_age >= CBC_DEAD_MSG_THRESHOLD) {
+      arrput(dead_msgs, old_sent);
+      arrdel(old_msgs, i);
+    }
+  }
+
+  return dead_msgs;
 }
 
 cbcast_sent_msg_t **find_old_messages(cbcast_t *cbc, uint16_t current_clock) {

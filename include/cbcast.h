@@ -85,17 +85,28 @@ struct CBcastStats {
 };
 typedef struct CBcastStats cbcast_stats_t;
 
+enum PeerState {
+  PEER_ALIVE,
+  PEER_SUSPECT,
+  PEER_DEAD,
+};
+
+typedef enum PeerState peer_state_t;
+
+struct CBCPeer {
+  uint64_t pid;
+  size_t pos;
+  struct sockaddr_in *addr;
+  peer_state_t state;
+};
+typedef struct CBCPeer cbcast_peer_t;
+
 struct CBcast {
   int socket_fd;
   uint64_t pid;
 
   vector_clock_t *vclock;
-
-  struct CBCPeer {
-    uint64_t pid;
-    size_t pos;
-    struct sockaddr_in *addr;
-  } **peers;
+  cbcast_peer_t **peers;
   pthread_mutex_t peer_lock;
 
   pthread_t send_thread;
@@ -116,7 +127,6 @@ struct CBcast {
 };
 
 typedef struct CBcast cbcast_t;
-typedef struct CBCPeer cbcast_peer_t;
 
 // cbc_init.c
 Result *cbc_init(uint64_t pid, uint64_t max_p, uint16_t port);
@@ -132,6 +142,9 @@ void cbc_remove_peer(cbcast_t *cbc, const uint64_t pid);
 
 uint16_t cbc_peer_find_by_addr(cbcast_t *cbc, struct sockaddr_in *addr);
 struct sockaddr_in *cbc_peer_get_addr_copy(cbcast_t *cbc, const uint64_t pid);
+
+uint64_t cbc_peer_count(cbcast_t *cbc);
+uint64_t *cbc_peer_get_ids(cbcast_t *cbc);
 
 // message.c
 Result *cbc_msg_create(const cbcast_msg_kind_t kind, const char *payload,
@@ -157,6 +170,7 @@ void *cbc_recv_thread(void *arg);
 Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len);
 void *cbc_send_thread(void *arg);
 
+// statistics.c
 #ifdef STATISTICS
 cJSON *cbc_collect_statistics(cbcast_t *cbc);
 cJSON *create_loki_log(cJSON *log_message);
