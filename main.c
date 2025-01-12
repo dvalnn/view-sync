@@ -52,20 +52,6 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
   int received_counter = 0;
   static int counter = 0;
 
-  char *log_file = NULL;
-  if (asprintf(&log_file, "worker_%lu.log", cbc->pid) < 0) {
-    perror("asprintf");
-    exit(EXIT_FAILURE);
-  }
-
-  {
-    FILE *log = fopen(log_file, "a");
-    if (log) {
-      fprintf(log, "[");
-      fclose(log);
-    }
-  }
-
   while (running) {
     cbcast_received_msg_t *received_msg = cbc_receive(cbc);
     if (received_msg) {
@@ -89,14 +75,6 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
       exit(EXIT_FAILURE);
     }
 
-    FILE *log = fopen(log_file, "a");
-    if (log) {
-      char *log_str = cJSON_PrintUnformatted(stats);
-      fprintf(log, "\n%s,", log_str);
-      free(log_str);
-      fclose(log);
-    }
-
     cJSON *loki_log = create_loki_log(stats);
     char *loki_log_str = cJSON_PrintUnformatted(loki_log);
     send_stats_to_loki(loki_log_str, LOKI_URL);
@@ -108,17 +86,6 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
 
     usleep(250000); // Simulate processing delay
   }
-
-  {
-    FILE *log = fopen(log_file, "a");
-    if (log) {
-      fseek(log, -1, SEEK_END);
-      fprintf(log, "\n]");
-      fclose(log);
-    }
-  }
-
-  free(log_file);
 
   // Step 3: Wait for turn to print state
   while ((uint64_t)sync_state[NUM_WORKERS] != cbc->pid) {

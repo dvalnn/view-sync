@@ -4,7 +4,6 @@
 #include <cjson/cJSON.h>
 #include <curl/curl.h>
 #include <stdio.h>
-#include <sys/param.h>
 #include <time.h>
 
 // Helper function to get the current timestamp in nanoseconds
@@ -41,16 +40,10 @@ cJSON *serialize_statistics_to_json(const uint64_t id,
                           stats->delivered_msg_count);
   cJSON_AddNumberToObject(log_message, "delivery_queue_size",
                           stats->delivery_queue_size);
-  cJSON_AddNumberToObject(log_message, "delivery_queue_max_size",
-                          stats->delivery_queue_max_size);
   cJSON_AddNumberToObject(log_message, "sent_msg_buffer_size",
                           stats->sent_msg_buffer_size);
-  cJSON_AddNumberToObject(log_message, "sent_msg_buffer_max_size",
-                          stats->sent_msg_buffer_max_size);
   cJSON_AddNumberToObject(log_message, "held_msg_buffer_size",
                           stats->held_msg_buffer_size);
-  cJSON_AddNumberToObject(log_message, "held_msg_buffer_max_size",
-                          stats->held_msg_buffer_max_size);
 
   cJSON *vector_clock = cJSON_CreateArray();
   for (uint64_t i = 0; i < stats->num_peers; i++) {
@@ -117,13 +110,6 @@ cJSON *cbc_collect_statistics(cbcast_t *cbc) {
 
   // Lock the statistics mutex
   pthread_mutex_lock(&cbc->stats_lock);
-  cbc->stats->sent_msg_buffer_max_size =
-      MAX(cbc->stats->sent_msg_buffer_max_size, sent_buffer_size);
-
-  cbc->stats->held_msg_buffer_max_size =
-      MAX(cbc->stats->held_msg_buffer_max_size, held_buffer_size);
-  cbc->stats->delivery_queue_max_size =
-      MAX(cbc->stats->delivery_queue_max_size, delivery_queue_size);
 
   // update buffer sizes
   cbc->stats->sent_msg_buffer_size = sent_buffer_size;

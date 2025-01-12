@@ -6,6 +6,8 @@ services:
     image: grafana/loki:2.9.2
     ports:
       - "3100:3100"
+    volumes:
+      - ./loki-config.yaml:/etc/loki/local-config.yaml:ro # Mount your local config file
     command: -config.file=/etc/loki/local-config.yaml
     networks:
       - loki
@@ -47,3 +49,4 @@ services:
       - "3000:3000"
     networks:
       - loki
+

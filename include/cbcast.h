@@ -63,6 +63,7 @@ typedef struct CBcastSentMessage cbcast_sent_msg_t;
 struct CBcastStats {
   uint64_t recv_msg_count;
 
+  uint64_t delivered_msg_count;
   uint64_t sent_msg_count;
   uint64_t dropped_msg_count;
 
@@ -75,15 +76,9 @@ struct CBcastStats {
   uint64_t sent_retransmit_count;
   uint64_t dropped_retransmit_count;
 
-  uint64_t delivered_msg_count;
   uint64_t delivery_queue_size;
-  uint64_t delivery_queue_max_size;
-
   uint64_t sent_msg_buffer_size;
-  uint64_t sent_msg_buffer_max_size;
-
   uint64_t held_msg_buffer_size;
-  uint64_t held_msg_buffer_max_size;
 
   uint64_t *vector_clock_snapshot;
   uint64_t num_peers;
