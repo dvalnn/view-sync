@@ -13,6 +13,8 @@
 void handle_old_messages(cbcast_t *cbc);
 uint16_t get_current_clock(cbcast_t *cbc);
 cbcast_sent_msg_t **find_old_messages(cbcast_t *cbc, uint16_t current_clock);
+uint64_t *find_dead_peers(cbcast_t *cbc, cbcast_sent_msg_t **dead_msgs);
+void handle_dead_peers(cbcast_t *cbc, uint64_t *dead_peers);
 void retransmit_messages(cbcast_t *cbc, cbcast_sent_msg_t **old_msgs);
 uint64_t *find_unacked_peers(cbcast_t *cbc, cbcast_sent_msg_t *old_sent);
 void queue_retransmit_messages(cbcast_t *cbc, cbcast_sent_msg_t *old_sent,
@@ -88,9 +90,62 @@ uint64_t *find_dead_peers(cbcast_t *cbc, cbcast_sent_msg_t **dead_msgs) {
 }
 
 void handle_dead_peers(cbcast_t *cbc, uint64_t *dead_peers) {
-  (void)cbc;
-  (void)dead_peers;
-  return (void)RESULT_UNIMPLEMENTED;
+  if (!cbc || !dead_peers) {
+    return (void)RESULT_UNREACHABLE;
+  }
+
+  if (arrlen(dead_peers) == 0) {
+    return;
+  }
+
+  pthread_mutex_lock(&cbc->peer_lock);
+  if (arrlen(cbc->peers) == 0) {
+    return (void)RESULT_UNREACHABLE;
+  }
+
+  int total_peers = arrlen(cbc->peers);
+  int remaining_peers = arrlen(cbc->peers) - arrlen(dead_peers);
+  pthread_mutex_unlock(&cbc->peer_lock);
+
+  // If no peers remain, terminate the broadcast context
+  if (remaining_peers < 1) {
+    printf("[handle_dead_peers] cbc pid %lu no peers remain. Disconnected\n",
+           cbc->pid);
+    cbc->state = CBC_DISCONNECTED;
+  }
+
+  // If remaining peers are in the minority, terminate the broadcast context
+  // and notify the user do not have enough peers to continue
+  if (remaining_peers < total_peers / 2) {
+    printf("[handle_dead_peers] cbc pid %lu minority of peers remain. "
+           "Disconnected\n",
+           cbc->pid);
+
+    cbc->state = CBC_DISCONNECTED;
+  }
+
+  // enter peer transition mode -- no messages are exchanged untill there is
+  // agreement on the new set of peers
+  // 1. Flag dead peers with PEER_SUSPECT state.
+  // 2. Flag the need for view change protocol.
+
+  // stop message exchange. Halt sent and receive threads
+  pthread_mutex_lock(&cbc->send_lock);
+  pthread_mutex_lock(&cbc->recv_lock);
+  pthread_mutex_lock(&cbc->peer_lock);
+
+  for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
+    if (arrfind(dead_peers, cbc->peers[i]->pid) != -1) {
+      cbc->peers[i]->state = PEER_SUSPECT;
+    }
+  }
+  arrfree(dead_peers);
+
+  cbc->state = CBC_STATE_VIEW_CHANGE;
+
+  pthread_mutex_unlock(&cbc->peer_lock);
+  pthread_mutex_unlock(&cbc->recv_lock);
+  pthread_mutex_unlock(&cbc->send_lock);
 }
 
 #define CBC_OLD_MSG_THRESHOLD 2
@@ -252,6 +307,10 @@ uint64_t broadcast(cbcast_t *cbc, const char *msg_bytes, const size_t msg_size,
   pthread_mutex_lock(&cbc->peer_lock);
   {
     for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
+      if (cbc->peers[i]->state != CBC_PEER_ALIVE) {
+        continue;
+      }
+
       ack_target |= 1 << cbc->peers[i]->pid;
 
 #ifdef NETWORK_SIMULATION
@@ -293,6 +352,35 @@ uint64_t broadcast(cbcast_t *cbc, const char *msg_bytes, const size_t msg_size,
   return ack_target;
 }
 
+cbcast_outgoing_msg_t *select_outgoing_msg(cbcast_t *cbc) {
+  if (cbc->state == CBC_DISCONNECTED) {
+    return NULL;
+  }
+
+  if (arrlen(cbc->send_queue) == 0) {
+    return RESULT_UNREACHABLE;
+  }
+
+  // Normal state messages are sent in order
+  if (cbc->state == CBC_STATE_NORMAL) {
+    cbcast_outgoing_msg_t *outgoing = cbc->send_queue[0];
+    arrdel(cbc->send_queue, 0);
+
+    return outgoing;
+  }
+
+  // In view change mode, search queue for view change messages
+  for (size_t i = 0; i < (size_t)arrlen(cbc->send_queue); i++) {
+    cbcast_outgoing_msg_t *outgoing = cbc->send_queue[i];
+    if (outgoing->message->header->kind == CBC_VIEW_CHANGE) {
+      arrdel(cbc->send_queue, i);
+      return outgoing;
+    }
+  }
+
+  return NULL;
+}
+
 void *cbc_send_thread(void *arg) {
   cbcast_t *cbc = (cbcast_t *)arg;
 
@@ -310,8 +398,7 @@ void *cbc_send_thread(void *arg) {
       pthread_cond_wait(&cbc->send_cond, &cbc->send_lock);
     }
 
-    cbcast_outgoing_msg_t *outgoing = cbc->send_queue[0];
-    arrdel(cbc->send_queue, 0);
+    cbcast_outgoing_msg_t *outgoing = select_outgoing_msg(cbc);
     pthread_mutex_unlock(&cbc->send_lock);
 
     size_t msg_size = 0;
@@ -331,6 +418,8 @@ void *cbc_send_thread(void *arg) {
 #endif
 
     switch (outgoing->message->header->kind) {
+      // View change is handled the same as data, but has priority
+    case CBC_VIEW_CHANGE:
     case CBC_DATA:
       uint64_t ack_target = broadcast(cbc, msg_bytes, msg_size, 0);
       cbcast_sent_msg_t *sent =
@@ -416,10 +505,6 @@ void *cbc_send_thread(void *arg) {
 
       sendto(cbc->socket_fd, msg_bytes, msg_size, outgoing->socket_flags,
              (struct sockaddr *)outgoing->addr, sizeof(*outgoing->addr));
-      break;
-
-    case CBC_HEARTBEAT:
-      return RESULT_UNIMPLEMENTED;
       break;
     }
 
