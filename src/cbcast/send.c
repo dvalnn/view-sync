@@ -22,6 +22,24 @@ void queue_retransmit_messages(cbcast_t *cbc, cbcast_sent_msg_t *old_sent,
 cbcast_sent_msg_t **filter_dead_messages(uint64_t current_clock,
                                          cbcast_sent_msg_t **old_msgs);
 
+void cbc_flush(cbcast_t *cbc) {
+  // retransmit all messages in the sent queue
+
+  // 1. duplicate sent msg buffer
+  cbcast_sent_msg_t **sent_msgs = NULL;
+  for (size_t i = 0; i < (size_t)arrlen(cbc->sent_msg_buffer); i++) {
+    arrput(sent_msgs, cbc->sent_msg_buffer[i]);
+  }
+  // 2. filter out dead messages
+  cbcast_sent_msg_t **dead_msgs =
+      filter_dead_messages(get_current_clock(cbc), sent_msgs);
+  arrfree(dead_msgs);
+
+  // 3. retransmit all remaining messages
+  retransmit_messages(cbc, sent_msgs);
+  pthread_cond_signal(&cbc->send_cond);
+}
+
 Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len) {
   if (!cbc || !payload || !payload_len) {
     return result_new_err("[cbc_send] Invalid arguments");
@@ -146,7 +164,6 @@ void handle_dead_peers(cbcast_t *cbc, uint64_t *dead_peers) {
       cbc->peers[i]->state = CBC_PEER_DEAD;
     }
   }
-  arrfree(dead_peers);
 
   cbc->state = CBC_STATE_PEER_SUSPECTED;
 
@@ -197,15 +214,23 @@ cbcast_sent_msg_t **filter_dead_messages(uint64_t current_clock,
                                          cbcast_sent_msg_t **old_msgs) {
   cbcast_sent_msg_t **dead_msgs = NULL;
 
-  for (size_t i = 0; i < (size_t)arrlen(old_msgs); i++) {
-    cbcast_sent_msg_t *old_sent = old_msgs[i];
-    uint16_t msg_age = current_clock - old_sent->message->header->clock;
+  bool keep_searching;
+  do {
+    keep_searching = false;
 
-    if (msg_age >= CBC_DEAD_MSG_THRESHOLD) {
-      arrput(dead_msgs, old_sent);
-      arrdel(old_msgs, i);
+    for (size_t i = 0; i < (size_t)arrlen(old_msgs); i++) {
+      cbcast_sent_msg_t *old_sent = old_msgs[i];
+      uint16_t msg_age = current_clock - old_sent->message->header->clock;
+
+      if (msg_age >= CBC_DEAD_MSG_THRESHOLD) {
+        arrput(dead_msgs, old_sent);
+        arrdel(old_msgs, i);
+        keep_searching = true;
+        break;
+      }
     }
-  }
+
+  } while (keep_searching);
 
   return dead_msgs;
 }
@@ -235,15 +260,14 @@ void retransmit_messages(cbcast_t *cbc, cbcast_sent_msg_t **old_msgs) {
       continue;
     }
 
+    uint64_t *target_peers = find_unacked_peers(cbc, old_sent);
+    if (!target_peers || arrlen(target_peers) == 0) {
+      return;
+    }
+
     printf("[retransmit_old_with_missing_acks] cbc pid %lu old message clock "
            "%d ack state %lu\n",
            cbc->pid, old_sent->message->header->clock, old_sent->ack_bitmap);
-
-    uint64_t *target_peers = find_unacked_peers(cbc, old_sent);
-
-    if (!target_peers || arrlen(target_peers) == 0) {
-      return (void)RESULT_UNREACHABLE;
-    }
 
     queue_retransmit_messages(cbc, old_sent, target_peers);
   }
@@ -257,6 +281,9 @@ uint64_t *find_unacked_peers(cbcast_t *cbc, cbcast_sent_msg_t *old_sent) {
   pthread_mutex_lock(&cbc->peer_lock);
   for (size_t j = 0; j < (size_t)arrlen(cbc->peers); j++) {
     if (old_sent->ack_bitmap & (1 << cbc->peers[j]->pid)) {
+      continue;
+    }
+    if (cbc->peers[j]->state == CBC_PEER_DEAD) {
       continue;
     }
     arrput(target_peers, cbc->peers[j]->pid);

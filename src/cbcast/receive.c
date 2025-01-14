@@ -30,6 +30,7 @@ void queue_retransmission(cbcast_t *cbc, cbcast_msg_t *msg,
                           uint16_t sender_pid);
 
 // ************** Function Definition ***************
+
 cbcast_received_msg_t *cbc_receive(cbcast_t *cbc) {
   if (!cbc) {
     return NULL;

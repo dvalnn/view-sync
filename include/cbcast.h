@@ -175,8 +175,8 @@ void *cbc_recv_thread(void *arg);
 
 // send.c
 Result *cbc_send(cbcast_t *cbc, const char *payload, const size_t payload_len);
+void cbc_flush(cbcast_t *cbc);
 void *cbc_send_thread(void *arg);
-
 // statistics.c
 #ifdef STATISTICS
 cJSON *cbc_collect_statistics(cbcast_t *cbc);
