@@ -24,7 +24,6 @@ Result *cbc_msg_create(const cbcast_msg_kind_t kind, const char *payload,
   switch (kind) {
   case CBC_ACK:
   case CBC_RETRANSMIT_REQ:
-  case CBC_HEARTBEAT:
     return create_msg_with_header(kind);
 
   case CBC_DATA:
@@ -57,12 +56,12 @@ char *cbc_msg_serialize(const cbcast_msg_t *msg, size_t *out_size) {
   switch (msg->header->kind) {
   case CBC_ACK:
   case CBC_RETRANSMIT_REQ:
-  case CBC_HEARTBEAT:
     return serialize_header_only(msg, out_size);
 
   case CBC_DATA:
   case CBC_RETRANSMIT:
     return serialize_full(msg, out_size);
+    break;
   }
 
   return RESULT_UNREACHABLE;
@@ -92,11 +91,11 @@ Result *cbc_msg_deserialize(const char *bytes) {
   switch (msg->header->kind) {
   case CBC_ACK:
   case CBC_RETRANSMIT_REQ:
-  case CBC_HEARTBEAT:
     return result_new_ok(msg); // no payload
 
   case CBC_DATA:
   case CBC_RETRANSMIT:
+    break;
     break;
   }
 
@@ -118,12 +117,6 @@ Result *cbc_msg_deserialize(const char *bytes) {
   }
   memcpy(msg->payload, bytes + sizeof(cbcast_msg_hdr_t), msg->header->len);
   msg->payload[msg->header->len] = '\0'; // Ensure null termination
-
-  // Debug output
-  /* printf("[cbc_msg_deserialize] Deserialized message: kind=%d, " */
-  /*        "clock=%d, len=%d, payload=\"%s\"\n", */
-  /*        msg->header->kind, msg->header->clock, msg->header->len,
-   * msg->payload); */
 
   return result_new_ok(msg);
 }

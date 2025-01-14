@@ -23,8 +23,6 @@ enum CBcastMessageType {
   CBC_ACK,
   CBC_RETRANSMIT_REQ,
   CBC_RETRANSMIT,
-
-  CBC_VIEW_CHANGE,
 };
 typedef enum CBcastMessageType cbcast_msg_kind_t;
 
@@ -88,7 +86,6 @@ typedef struct CBcastStats cbcast_stats_t;
 
 enum PeerState {
   CBC_PEER_ALIVE,
-  CBC_PEER_SUSPECT,
   CBC_PEER_DEAD,
 };
 
@@ -104,8 +101,8 @@ typedef struct CBCPeer cbcast_peer_t;
 
 enum CBcast_state {
   CBC_STATE_NORMAL,
-  CBC_STATE_VIEW_CHANGE,
-  CBC_DISCONNECTED,
+  CBC_STATE_PEER_SUSPECTED,
+  CBC_STATE_DISCONNECTED,
 };
 
 typedef enum CBcast_state cbcast_state_t;
@@ -186,5 +183,10 @@ cJSON *cbc_collect_statistics(cbcast_t *cbc);
 cJSON *create_loki_log(cJSON *log_message);
 void send_stats_to_loki(char *json_payload, const char *loki_url);
 #endif
+
+// view_sync.c
+Result *view_sync_cbc_send(cbcast_t *cbc, const char *payload,
+                           const size_t payload_len);
+cbcast_received_msg_t *view_sync_cbc_receive(cbcast_t *cbc);
 
 #endif

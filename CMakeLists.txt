@@ -14,7 +14,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(SRC_FILES
     # project
     src/result.c
-    src/view.c
     src/vector_clock.c
 
     src/cbcast/init.c
@@ -23,6 +22,7 @@ set(SRC_FILES
     src/cbcast/receive.c
     src/cbcast/send.c
     src/cbcast/statistics.c
+    src/cbcast/view_sync.c
 
     # Third party
     src/lib/stb_ds.c

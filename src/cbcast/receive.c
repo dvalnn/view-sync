@@ -122,9 +122,6 @@ void *cbc_recv_thread(void *arg) {
       queue_retransmission(cbc, msg, sender_pid);
       cbc_msg_free(msg);
       break;
-
-    case CBC_HEARTBEAT:
-      return RESULT_UNREACHABLE;
     }
   }
 

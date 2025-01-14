@@ -28,6 +28,7 @@ Result *cbc_init(uint64_t pid, uint64_t max_p, uint16_t port) {
 #endif
 
   cbc->pid = pid;
+  cbc->state = CBC_STATE_NORMAL;
   cbc->vclock =
       result_expect(vc_init(max_p), "[cbc_init] failed to init vclock");
 

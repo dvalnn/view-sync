@@ -53,7 +53,7 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
   static int counter = 0;
 
   while (running) {
-    cbcast_received_msg_t *received_msg = cbc_receive(cbc);
+    cbcast_received_msg_t *received_msg = view_sync_cbc_receive(cbc);
     if (received_msg) {
       printf("[main] Worker %lu received: \"%s\" %d from peer %d\n", cbc->pid,
              received_msg->message->payload, ++received_counter,
@@ -64,7 +64,7 @@ void worker_process(cbcast_t *cbc, volatile int *sync_state) {
     if (++counter % 10 == 0) {
       char message[64];
       snprintf(message, sizeof(message), "Hello from worker %lu!", cbc->pid);
-      result_expect(cbc_send(cbc, message, strlen(message)),
+      result_expect(view_sync_cbc_send(cbc, message, strlen(message)),
                     "[main] Failed to broadcast message");
     }
 
