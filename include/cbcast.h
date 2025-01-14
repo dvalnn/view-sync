@@ -23,8 +23,6 @@ enum CBcastMessageType {
   CBC_ACK,
   CBC_RETRANSMIT_REQ,
   CBC_RETRANSMIT,
-
-  CBC_VIEW_CHANGE,
 };
 typedef enum CBcastMessageType cbcast_msg_kind_t;
 
@@ -88,7 +86,6 @@ typedef struct CBcastStats cbcast_stats_t;
 
 enum PeerState {
   CBC_PEER_ALIVE,
-  CBC_PEER_SUSPECT,
   CBC_PEER_DEAD,
 };
 
@@ -104,7 +101,6 @@ typedef struct CBCPeer cbcast_peer_t;
 
 enum CBcast_state {
   CBC_STATE_NORMAL,
-  CBC_STATE_VIEW_CHANGE,
   CBC_DISCONNECTED,
 };
 

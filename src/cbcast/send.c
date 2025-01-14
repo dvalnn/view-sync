@@ -74,9 +74,8 @@ uint64_t *find_dead_peers(cbcast_t *cbc, cbcast_sent_msg_t **dead_msgs) {
   for (size_t i = 0; i < (size_t)arrlen(dead_msgs); i++) {
     cbcast_sent_msg_t *old_sent = dead_msgs[i];
     uint64_t *target_peers = find_unacked_peers(cbc, old_sent);
-
     if (!target_peers || arrlen(target_peers) == 0) {
-      return RESULT_UNREACHABLE;
+      return NULL;
     }
 
     for (size_t j = 0; j < (size_t)arrlen(target_peers); j++) {
@@ -124,11 +123,6 @@ void handle_dead_peers(cbcast_t *cbc, uint64_t *dead_peers) {
     cbc->state = CBC_DISCONNECTED;
   }
 
-  // enter peer transition mode -- no messages are exchanged untill there is
-  // agreement on the new set of peers
-  // 1. Flag dead peers with PEER_SUSPECT state.
-  // 2. Flag the need for view change protocol.
-
   // stop message exchange. Halt sent and receive threads
   pthread_mutex_lock(&cbc->send_lock);
   pthread_mutex_lock(&cbc->recv_lock);
@@ -136,16 +130,41 @@ void handle_dead_peers(cbcast_t *cbc, uint64_t *dead_peers) {
 
   for (size_t i = 0; i < (size_t)arrlen(cbc->peers); i++) {
     if (arrfind(dead_peers, cbc->peers[i]->pid) != -1) {
-      cbc->peers[i]->state = PEER_SUSPECT;
+      cbc->peers[i]->state = CBC_PEER_DEAD;
     }
   }
-  arrfree(dead_peers);
 
-  cbc->state = CBC_STATE_VIEW_CHANGE;
+  // mark messages to dead peers as if they were acked
+  for (size_t i = 0; i < (size_t)arrlen(cbc->sent_msg_buffer); i++) {
+    cbcast_sent_msg_t *sent_msg = cbc->sent_msg_buffer[i];
+    for (size_t j = 0; j < (size_t)arrlen(dead_peers); j++) {
+      sent_msg->ack_bitmap |= 1 << dead_peers[j];
+    }
+  }
+
+  bool stop_searching;
+  do {
+    stop_searching = true;
+
+    for (size_t i = 0; i < (size_t)arrlen(cbc->sent_msg_buffer); i++) {
+      cbcast_sent_msg_t *sent_msg = cbc->sent_msg_buffer[i];
+      if (sent_msg->ack_bitmap == sent_msg->ack_target) {
+        stop_searching = false;
+        arrdel(cbc->sent_msg_buffer, i);
+        break;
+      }
+    }
+
+  } while (!stop_searching);
+
+  printf("[handle_dead_peers] cbc pid %lu marked dead peers\n", cbc->pid);
 
   pthread_mutex_unlock(&cbc->peer_lock);
   pthread_mutex_unlock(&cbc->recv_lock);
   pthread_mutex_unlock(&cbc->send_lock);
+
+  printf("[handle_dead_peers] cbc pid %lu resuming message exchange\n",
+         cbc->pid);
 }
 
 #define CBC_OLD_MSG_THRESHOLD 2
@@ -166,13 +185,16 @@ void handle_old_messages(cbcast_t *cbc) {
   }
 
   cbcast_sent_msg_t **dead_msgs = filter_dead_messages(current_clock, old_msgs);
-  uint64_t *dead_peers = find_dead_peers(cbc, dead_msgs);
-  arrfree(dead_msgs);
+  if (arrlen(dead_msgs) > 0) {
+    uint64_t *dead_peers = find_dead_peers(cbc, dead_msgs);
+    arrfree(dead_msgs);
 
-  if (arrlen(dead_peers) > 0) {
-    handle_dead_peers(cbc, dead_peers);
-    arrfree(dead_peers);
+    if (dead_peers && arrlen(dead_peers) > 0) {
+      handle_dead_peers(cbc, dead_peers);
+      arrfree(dead_peers);
+    }
   }
+
   retransmit_messages(cbc, old_msgs);
 }
 
@@ -187,15 +209,23 @@ cbcast_sent_msg_t **filter_dead_messages(uint64_t current_clock,
                                          cbcast_sent_msg_t **old_msgs) {
   cbcast_sent_msg_t **dead_msgs = NULL;
 
-  for (size_t i = 0; i < (size_t)arrlen(old_msgs); i++) {
-    cbcast_sent_msg_t *old_sent = old_msgs[i];
-    uint16_t msg_age = current_clock - old_sent->message->header->clock;
+  bool keep_searching;
+  do {
+    keep_searching = false;
 
-    if (msg_age >= CBC_DEAD_MSG_THRESHOLD) {
-      arrput(dead_msgs, old_sent);
-      arrdel(old_msgs, i);
+    for (size_t i = 0; i < (size_t)arrlen(old_msgs); i++) {
+      cbcast_sent_msg_t *old_sent = old_msgs[i];
+      uint16_t msg_age = current_clock - old_sent->message->header->clock;
+
+      if (msg_age >= CBC_DEAD_MSG_THRESHOLD) {
+        arrput(dead_msgs, old_sent);
+        arrdel(old_msgs, i);
+        keep_searching = true;
+        break;
+      }
     }
-  }
+
+  } while (keep_searching);
 
   return dead_msgs;
 }
@@ -225,15 +255,14 @@ void retransmit_messages(cbcast_t *cbc, cbcast_sent_msg_t **old_msgs) {
       continue;
     }
 
+    uint64_t *target_peers = find_unacked_peers(cbc, old_sent);
+    if (!target_peers || arrlen(target_peers) == 0) {
+      return;
+    }
+
     printf("[retransmit_old_with_missing_acks] cbc pid %lu old message clock "
            "%d ack state %lu\n",
            cbc->pid, old_sent->message->header->clock, old_sent->ack_bitmap);
-
-    uint64_t *target_peers = find_unacked_peers(cbc, old_sent);
-
-    if (!target_peers || arrlen(target_peers) == 0) {
-      return (void)RESULT_UNREACHABLE;
-    }
 
     queue_retransmit_messages(cbc, old_sent, target_peers);
   }
@@ -352,35 +381,6 @@ uint64_t broadcast(cbcast_t *cbc, const char *msg_bytes, const size_t msg_size,
   return ack_target;
 }
 
-cbcast_outgoing_msg_t *select_outgoing_msg(cbcast_t *cbc) {
-  if (cbc->state == CBC_DISCONNECTED) {
-    return NULL;
-  }
-
-  if (arrlen(cbc->send_queue) == 0) {
-    return RESULT_UNREACHABLE;
-  }
-
-  // Normal state messages are sent in order
-  if (cbc->state == CBC_STATE_NORMAL) {
-    cbcast_outgoing_msg_t *outgoing = cbc->send_queue[0];
-    arrdel(cbc->send_queue, 0);
-
-    return outgoing;
-  }
-
-  // In view change mode, search queue for view change messages
-  for (size_t i = 0; i < (size_t)arrlen(cbc->send_queue); i++) {
-    cbcast_outgoing_msg_t *outgoing = cbc->send_queue[i];
-    if (outgoing->message->header->kind == CBC_VIEW_CHANGE) {
-      arrdel(cbc->send_queue, i);
-      return outgoing;
-    }
-  }
-
-  return NULL;
-}
-
 void *cbc_send_thread(void *arg) {
   cbcast_t *cbc = (cbcast_t *)arg;
 
@@ -398,7 +398,8 @@ void *cbc_send_thread(void *arg) {
       pthread_cond_wait(&cbc->send_cond, &cbc->send_lock);
     }
 
-    cbcast_outgoing_msg_t *outgoing = select_outgoing_msg(cbc);
+    cbcast_outgoing_msg_t *outgoing = cbc->send_queue[0];
+    arrdel(cbc->send_queue, 0);
     pthread_mutex_unlock(&cbc->send_lock);
 
     size_t msg_size = 0;
@@ -419,7 +420,6 @@ void *cbc_send_thread(void *arg) {
 
     switch (outgoing->message->header->kind) {
       // View change is handled the same as data, but has priority
-    case CBC_VIEW_CHANGE:
     case CBC_DATA:
       uint64_t ack_target = broadcast(cbc, msg_bytes, msg_size, 0);
       cbcast_sent_msg_t *sent =

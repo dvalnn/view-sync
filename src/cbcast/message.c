@@ -24,7 +24,6 @@ Result *cbc_msg_create(const cbcast_msg_kind_t kind, const char *payload,
   switch (kind) {
   case CBC_ACK:
   case CBC_RETRANSMIT_REQ:
-  case CBC_HEARTBEAT:
     return create_msg_with_header(kind);
 
   case CBC_DATA:
@@ -57,7 +56,6 @@ char *cbc_msg_serialize(const cbcast_msg_t *msg, size_t *out_size) {
   switch (msg->header->kind) {
   case CBC_ACK:
   case CBC_RETRANSMIT_REQ:
-  case CBC_HEARTBEAT:
     return serialize_header_only(msg, out_size);
 
   case CBC_DATA:
@@ -92,7 +90,6 @@ Result *cbc_msg_deserialize(const char *bytes) {
   switch (msg->header->kind) {
   case CBC_ACK:
   case CBC_RETRANSMIT_REQ:
-  case CBC_HEARTBEAT:
     return result_new_ok(msg); // no payload
 
   case CBC_DATA:
