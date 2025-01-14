@@ -96,7 +96,6 @@ Result *cbc_msg_deserialize(const char *bytes) {
   case CBC_DATA:
   case CBC_RETRANSMIT:
     break;
-    break;
   }
 
   // Validate header length to prevent overflows
