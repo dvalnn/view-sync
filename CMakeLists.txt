@@ -27,7 +27,7 @@ set(SRC_FILES
     src/lib/stb_ds.c
 )
 
-# Add the test files
+# Tests are broken and outdated right now
 set(TEST_FILES
     # test/test_result.c
     # test/test_view.c
